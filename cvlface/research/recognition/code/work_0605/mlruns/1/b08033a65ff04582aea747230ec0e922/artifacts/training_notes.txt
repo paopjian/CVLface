@@ -1,0 +1,3 @@
+Training completed successfully.
+Best LFW: 0.9995
+Best IJB-C: 0.9749

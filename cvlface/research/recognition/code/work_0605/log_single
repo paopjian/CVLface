@@ -1,0 +1,173 @@
+Benchmark config:
+  Data root:      /data1/dataset_0605/try
+  Benchmark root: /data1/dataset_0605/benchmark
+  Batch size:     256
+  Num workers:    8
+  Model:          ir101
+  Formats:        ['imagefolder', 'lmdb', 'recordio', 'webdataset', 'hdf5', 'zarr']
+  World size:     1
+
+
+--- Benchmarking: imagefolder ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (1.5s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...
+    batch 20/187 | data 0ms | fwd+bwd 4ms | 2069 samples/s
+    batch 40/187 | data 0ms | fwd+bwd 5ms | 3293 samples/s
+    batch 60/187 | data 0ms | fwd+bwd 4ms | 3872 samples/s
+    batch 80/187 | data 1ms | fwd+bwd 4ms | 4509 samples/s
+    batch 100/187 | data 1ms | fwd+bwd 4ms | 4684 samples/s
+    batch 120/187 | data 48ms | fwd+bwd 7ms | 5071 samples/s
+    batch 140/187 | data 22ms | fwd+bwd 5ms | 5311 samples/s
+    batch 160/187 | data 0ms | fwd+bwd 4ms | 5518 samples/s
+    batch 180/187 | data 106ms | fwd+bwd 4ms | 5652 samples/s
+  [5/5] Epoch done: 187 batches in 8.3s
+  Epoch time: 8.27s, Data load: 29.35ms/batch, Throughput: 5787 samples/s
+
+--- Benchmarking: lmdb ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (0.0s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...
+    batch 20/187 | data 19ms | fwd+bwd 5ms | 4640 samples/s
+    batch 40/187 | data 0ms | fwd+bwd 4ms | 6280 samples/s
+    batch 60/187 | data 1ms | fwd+bwd 10ms | 5607 samples/s
+    batch 80/187 | data 1ms | fwd+bwd 12ms | 5840 samples/s
+    batch 100/187 | data 13ms | fwd+bwd 5ms | 5958 samples/s
+    batch 120/187 | data 58ms | fwd+bwd 5ms | 6228 samples/s
+    batch 140/187 | data 70ms | fwd+bwd 5ms | 6348 samples/s
+    batch 160/187 | data 118ms | fwd+bwd 7ms | 6369 samples/s
+    batch 180/187 | data 15ms | fwd+bwd 5ms | 6600 samples/s
+  [5/5] Epoch done: 187 batches in 7.1s
+  Epoch time: 7.13s, Data load: 28.82ms/batch, Throughput: 6712 samples/s
+
+--- Benchmarking: recordio ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (0.1s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...
+    batch 20/187 | data 1ms | fwd+bwd 7ms | 3580 samples/s
+    batch 40/187 | data 1ms | fwd+bwd 3ms | 5428 samples/s
+    batch 60/187 | data 1ms | fwd+bwd 6ms | 5570 samples/s
+    batch 80/187 | data 0ms | fwd+bwd 5ms | 5989 samples/s
+    batch 100/187 | data 65ms | fwd+bwd 7ms | 5812 samples/s
+    batch 120/187 | data 1ms | fwd+bwd 6ms | 6128 samples/s
+    batch 140/187 | data 218ms | fwd+bwd 9ms | 5977 samples/s
+    batch 160/187 | data 1ms | fwd+bwd 4ms | 6263 samples/s
+    batch 180/187 | data 1ms | fwd+bwd 5ms | 6337 samples/s
+  [5/5] Epoch done: 187 batches in 7.5s
+  Epoch time: 7.48s, Data load: 30.90ms/batch, Throughput: 6398 samples/s
+
+--- Benchmarking: webdataset ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (0.0s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~? batches)...
+    batch 20/? | data 0ms | fwd+bwd 4ms | 2258 samples/s
+    batch 40/? | data 0ms | fwd+bwd 4ms | 2757 samples/s
+    batch 60/? | data 1ms | fwd+bwd 4ms | 2974 samples/s
+    batch 80/? | data 0ms | fwd+bwd 4ms | 3039 samples/s
+    batch 100/? | data 216ms | fwd+bwd 5ms | 3070 samples/s
+    batch 120/? | data 0ms | fwd+bwd 4ms | 3159 samples/s
+    batch 140/? | data 0ms | fwd+bwd 4ms | 3169 samples/s
+    batch 160/? | data 207ms | fwd+bwd 5ms | 3164 samples/s
+    batch 180/? | data 278ms | fwd+bwd 4ms | 3143 samples/s
+  [5/5] Epoch done: 185 batches in 15.7s
+  Epoch time: 15.66s, Data load: 75.55ms/batch, Throughput: 3023 samples/s
+
+--- Benchmarking: hdf5 ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (0.1s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...
+    batch 20/187 | data 0ms | fwd+bwd 4ms | 4322 samples/s
+    batch 40/187 | data 0ms | fwd+bwd 4ms | 6089 samples/s
+    batch 60/187 | data 1ms | fwd+bwd 4ms | 6087 samples/s
+    batch 80/187 | data 0ms | fwd+bwd 4ms | 6714 samples/s
+    batch 100/187 | data 0ms | fwd+bwd 4ms | 6841 samples/s
+    batch 120/187 | data 1ms | fwd+bwd 4ms | 6916 samples/s
+    batch 140/187 | data 0ms | fwd+bwd 4ms | 7241 samples/s
+    batch 160/187 | data 0ms | fwd+bwd 3ms | 7308 samples/s
+    batch 180/187 | data 1ms | fwd+bwd 10ms | 7342 samples/s
+  [5/5] Epoch done: 187 batches in 6.6s
+  Epoch time: 6.56s, Data load: 27.38ms/batch, Throughput: 7293 samples/s
+
+--- Benchmarking: zarr ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (0.4s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...
+Benchmark config:
+  Data root:      /data1/dataset_0605/try
+  Benchmark root: /data1/dataset_0605/benchmark
+  Batch size:     256
+  Num workers:    8
+  Model:          ir18
+  Formats:        ['zarr']
+  World size:     1
+
+
+--- Benchmarking: zarr ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (3.2s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...
+    batch 20/187 | data 0ms | fwd+bwd 4ms | 211 samples/s
+    batch 40/187 | data 1551ms | fwd+bwd 6ms | 245 samples/s
+    batch 60/187 | data 1ms | fwd+bwd 4ms | 238 samples/s
+    batch 80/187 | data 1350ms | fwd+bwd 6ms | 250 samples/s
+    batch 100/187 | data 1ms | fwd+bwd 5ms | 244 samples/s
+    batch 120/187 | data 499ms | fwd+bwd 6ms | 253 samples/s
+    batch 140/187 | data 1ms | fwd+bwd 6ms | 247 samples/s
+    batch 160/187 | data 0ms | fwd+bwd 4ms | 255 samples/s
+    batch 180/187 | data 0ms | fwd+bwd 4ms | 249 samples/s
+  [5/5] Epoch done: 187 batches in 193.1s
+  Epoch time: 193.07s, Data load: 988.27ms/batch, Throughput: 248 samples/s
+
+==========================================================================================
+Format       Disk(MB)   Epoch(s)   DataLoad(ms)  Batch(ms)  Throughput   GPU Mem(MB) 
+------------------------------------------------------------------------------------------
+zarr         1480.8     193.07     988.27        5.85       248          1055        
+==========================================================================================
+
+Results saved to: /data1/dataset_0605/benchmark/benchmark_results.json
+Benchmark config:
+  Data root:      /data1/dataset_0605/try
+  Benchmark root: /data1/dataset_0605/benchmark
+  Batch size:     256
+  Num workers:    8
+  Model:          ir101
+  Formats:        ['zarr']
+  World size:     1
+
+
+--- Benchmarking: zarr ---
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 48091 samples (2.9s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~187 batches)...

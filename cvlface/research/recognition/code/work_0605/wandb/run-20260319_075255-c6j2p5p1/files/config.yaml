@@ -1,0 +1,31 @@
+_wandb:
+    value:
+        cli_version: 0.25.1
+        e:
+            d1vtrsdddsejq4ao5ag11f1q9es9j8yc:
+                codePath: /root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213/move.ipynb
+                codePathLocal: move.ipynb
+                email: kejian.zhao@tsings.cn
+                executable: /root/anaconda3/envs/zkj-work/bin/python
+                host: star
+                os: Linux-5.15.0-170-generic-x86_64-with-glibc2.35
+                program: /root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213/move.ipynb
+                python: CPython 3.12.0
+                root: /root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213
+                startedAt: "2026-03-19T07:52:55.446890Z"
+                writerId: d1vtrsdddsejq4ao5ag11f1q9es9j8yc
+        m: []
+        python_version: 3.12.0
+        t:
+            "3":
+                - 2
+                - 5
+                - 13
+                - 14
+                - 62
+            "4": 3.12.0
+            "5": 0.25.1
+            "8":
+                - 1
+            "12": 0.25.1
+            "13": linux-x86_64
