@@ -1,0 +1,28 @@
+{
+  "os": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+  "python": "CPython 3.12.0",
+  "startedAt": "2026-03-14T03:47:25.271002Z",
+  "program": "/root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213/wandb.ipynb",
+  "codePath": "/root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213/wandb.ipynb",
+  "codePathLocal": "wandb.ipynb",
+  "git": {
+    "remote": "https://github.com/mk-minchul/CVLface.git",
+    "commit": "308142aa50adf2e187711354f7524635d3414f1e"
+  },
+  "email": "kejian.zhao@tsings.cn",
+  "root": "/root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213",
+  "host": "star",
+  "executable": "/root/anaconda3/envs/zkj-work/bin/python",
+  "cpu_count": 64,
+  "cpu_count_logical": 128,
+  "disk": {
+    "/": {
+      "total": "942725181440",
+      "used": "650066280448"
+    }
+  },
+  "memory": {
+    "total": "540646264832"
+  },
+  "writerId": "uu1qcg78q9nvn3ni9tgpd47nkadg92ta"
+}

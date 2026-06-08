@@ -1,0 +1,13 @@
+{
+  "os": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+  "python": "CPython 3.12.0",
+  "startedAt": "2026-03-19T07:52:47.501540Z",
+  "program": "/root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213/move.ipynb",
+  "codePath": "/root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213/move.ipynb",
+  "codePathLocal": "move.ipynb",
+  "email": "kejian.zhao@tsings.cn",
+  "root": "/root/zhaokj/CVLface/cvlface/research/recognition/code/work_0213",
+  "host": "star",
+  "executable": "/root/anaconda3/envs/zkj-work/bin/python",
+  "writerId": "ex0mqeygn9ru8e6la0x157rbuet5lnm1"
+}

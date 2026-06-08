@@ -1,0 +1,1217 @@
+Benchmark config:
+  Data root:      /data1/dataset_0605/try3
+  Benchmark root: /data1/dataset_0605/benchmark3
+  Batch size:     256
+  Num workers:    8
+  Model:          ir18
+  Formats:        ['imagefolder', 'lmdb', 'recordio', 'webdataset', 'hdf5']
+  World size:     7
+
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 9345976 samples, 200001 classes (41.6s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~5215 batches)...
+    batch 20/5215 | data 1ms | fwd+bwd 81ms | 1290 samples/s
+    batch 40/5215 | data 1ms | fwd+bwd 78ms | 1853 samples/s
+    batch 60/5215 | data 1ms | fwd+bwd 72ms | 2187 samples/s
+    batch 80/5215 | data 1ms | fwd+bwd 72ms | 2404 samples/s
+    batch 100/5215 | data 1ms | fwd+bwd 77ms | 2555 samples/s
+    batch 120/5215 | data 0ms | fwd+bwd 75ms | 2663 samples/s
+    batch 140/5215 | data 1ms | fwd+bwd 75ms | 2742 samples/s
+    batch 160/5215 | data 1ms | fwd+bwd 75ms | 2804 samples/s
+    batch 180/5215 | data 1ms | fwd+bwd 79ms | 2855 samples/s
+    batch 200/5215 | data 1ms | fwd+bwd 82ms | 2897 samples/s
+    batch 220/5215 | data 1ms | fwd+bwd 80ms | 2923 samples/s
+    batch 240/5215 | data 1ms | fwd+bwd 77ms | 2949 samples/s
+    batch 260/5215 | data 1ms | fwd+bwd 75ms | 2975 samples/s
+    batch 280/5215 | data 1ms | fwd+bwd 79ms | 2995 samples/s
+    batch 300/5215 | data 1ms | fwd+bwd 70ms | 3014 samples/s
+    batch 320/5215 | data 1ms | fwd+bwd 78ms | 3032 samples/s
+    batch 340/5215 | data 1ms | fwd+bwd 79ms | 3045 samples/s
+    batch 360/5215 | data 1ms | fwd+bwd 78ms | 3058 samples/s
+    batch 380/5215 | data 1ms | fwd+bwd 76ms | 3070 samples/s
+    batch 400/5215 | data 1ms | fwd+bwd 77ms | 3079 samples/s
+    batch 420/5215 | data 1ms | fwd+bwd 76ms | 3089 samples/s
+    batch 440/5215 | data 1ms | fwd+bwd 80ms | 3096 samples/s
+    batch 460/5215 | data 1ms | fwd+bwd 78ms | 3105 samples/s
+    batch 480/5215 | data 1ms | fwd+bwd 76ms | 3112 samples/s
+    batch 500/5215 | data 1ms | fwd+bwd 75ms | 3120 samples/s
+    batch 520/5215 | data 1ms | fwd+bwd 76ms | 3127 samples/s
+    batch 540/5215 | data 1ms | fwd+bwd 78ms | 3132 samples/s
+    batch 560/5215 | data 1ms | fwd+bwd 77ms | 3137 samples/s
+    batch 580/5215 | data 1ms | fwd+bwd 80ms | 3141 samples/s
+    batch 600/5215 | data 1ms | fwd+bwd 73ms | 3146 samples/s
+    batch 620/5215 | data 1ms | fwd+bwd 77ms | 3151 samples/s
+    batch 640/5215 | data 1ms | fwd+bwd 75ms | 3154 samples/s
+    batch 660/5215 | data 2ms | fwd+bwd 76ms | 3159 samples/s
+    batch 680/5215 | data 1ms | fwd+bwd 76ms | 3163 samples/s
+    batch 700/5215 | data 1ms | fwd+bwd 79ms | 3167 samples/s
+    batch 720/5215 | data 1ms | fwd+bwd 75ms | 3171 samples/s
+    batch 740/5215 | data 1ms | fwd+bwd 72ms | 3175 samples/s
+    batch 760/5215 | data 1ms | fwd+bwd 74ms | 3180 samples/s
+    batch 780/5215 | data 1ms | fwd+bwd 77ms | 3183 samples/s
+    batch 800/5215 | data 1ms | fwd+bwd 77ms | 3187 samples/s
+    batch 820/5215 | data 1ms | fwd+bwd 74ms | 3190 samples/s
+    batch 840/5215 | data 1ms | fwd+bwd 74ms | 3192 samples/s
+    batch 860/5215 | data 1ms | fwd+bwd 77ms | 3195 samples/s
+    batch 880/5215 | data 1ms | fwd+bwd 72ms | 3197 samples/s
+    batch 900/5215 | data 1ms | fwd+bwd 76ms | 3199 samples/s
+    batch 920/5215 | data 1ms | fwd+bwd 78ms | 3202 samples/s
+    batch 940/5215 | data 1ms | fwd+bwd 77ms | 3205 samples/s
+    batch 960/5215 | data 1ms | fwd+bwd 74ms | 3207 samples/s
+    batch 980/5215 | data 1ms | fwd+bwd 78ms | 3210 samples/s
+    batch 1000/5215 | data 1ms | fwd+bwd 71ms | 3213 samples/s
+    batch 1020/5215 | data 1ms | fwd+bwd 74ms | 3216 samples/s
+    batch 1040/5215 | data 1ms | fwd+bwd 75ms | 3217 samples/s
+    batch 1060/5215 | data 1ms | fwd+bwd 79ms | 3219 samples/s
+    batch 1080/5215 | data 1ms | fwd+bwd 76ms | 3222 samples/s
+    batch 1100/5215 | data 1ms | fwd+bwd 75ms | 3225 samples/s
+    batch 1120/5215 | data 1ms | fwd+bwd 75ms | 3226 samples/s
+    batch 1140/5215 | data 1ms | fwd+bwd 74ms | 3228 samples/s
+    batch 1160/5215 | data 1ms | fwd+bwd 79ms | 3231 samples/s
+    batch 1180/5215 | data 1ms | fwd+bwd 75ms | 3234 samples/s
+    batch 1200/5215 | data 1ms | fwd+bwd 76ms | 3236 samples/s
+    batch 1220/5215 | data 2ms | fwd+bwd 75ms | 3236 samples/s
+    batch 1240/5215 | data 1ms | fwd+bwd 73ms | 3238 samples/s
+    batch 1260/5215 | data 1ms | fwd+bwd 77ms | 3240 samples/s
+    batch 1280/5215 | data 1ms | fwd+bwd 71ms | 3242 samples/s
+    batch 1300/5215 | data 2ms | fwd+bwd 74ms | 3243 samples/s
+    batch 1320/5215 | data 1ms | fwd+bwd 73ms | 3244 samples/s
+    batch 1340/5215 | data 1ms | fwd+bwd 81ms | 3245 samples/s
+    batch 1360/5215 | data 1ms | fwd+bwd 76ms | 3246 samples/s
+    batch 1380/5215 | data 1ms | fwd+bwd 78ms | 3248 samples/s
+    batch 1400/5215 | data 1ms | fwd+bwd 78ms | 3249 samples/s
+    batch 1420/5215 | data 1ms | fwd+bwd 74ms | 3251 samples/s
+    batch 1440/5215 | data 1ms | fwd+bwd 78ms | 3252 samples/s
+    batch 1460/5215 | data 1ms | fwd+bwd 74ms | 3253 samples/s
+    batch 1480/5215 | data 1ms | fwd+bwd 73ms | 3255 samples/s
+    batch 1500/5215 | data 1ms | fwd+bwd 78ms | 3256 samples/s
+    batch 1520/5215 | data 1ms | fwd+bwd 78ms | 3257 samples/s
+    batch 1540/5215 | data 1ms | fwd+bwd 73ms | 3259 samples/s
+    batch 1560/5215 | data 1ms | fwd+bwd 74ms | 3260 samples/s
+    batch 1580/5215 | data 1ms | fwd+bwd 76ms | 3262 samples/s
+    batch 1600/5215 | data 1ms | fwd+bwd 77ms | 3262 samples/s
+    batch 1620/5215 | data 1ms | fwd+bwd 77ms | 3263 samples/s
+    batch 1640/5215 | data 1ms | fwd+bwd 78ms | 3263 samples/s
+    batch 1660/5215 | data 1ms | fwd+bwd 76ms | 3264 samples/s
+    batch 1680/5215 | data 1ms | fwd+bwd 77ms | 3265 samples/s
+    batch 1700/5215 | data 1ms | fwd+bwd 74ms | 3266 samples/s
+    batch 1720/5215 | data 1ms | fwd+bwd 77ms | 3267 samples/s
+    batch 1740/5215 | data 1ms | fwd+bwd 74ms | 3268 samples/s
+    batch 1760/5215 | data 1ms | fwd+bwd 75ms | 3269 samples/s
+    batch 1780/5215 | data 1ms | fwd+bwd 74ms | 3270 samples/s
+    batch 1800/5215 | data 1ms | fwd+bwd 75ms | 3271 samples/s
+    batch 1820/5215 | data 1ms | fwd+bwd 76ms | 3271 samples/s
+    batch 1840/5215 | data 1ms | fwd+bwd 77ms | 3272 samples/s
+    batch 1860/5215 | data 1ms | fwd+bwd 75ms | 3273 samples/s
+    batch 1880/5215 | data 1ms | fwd+bwd 75ms | 3274 samples/s
+    batch 1900/5215 | data 1ms | fwd+bwd 73ms | 3275 samples/s
+    batch 1920/5215 | data 1ms | fwd+bwd 76ms | 3276 samples/s
+    batch 1940/5215 | data 1ms | fwd+bwd 75ms | 3276 samples/s
+    batch 1960/5215 | data 1ms | fwd+bwd 78ms | 3277 samples/s
+    batch 1980/5215 | data 2ms | fwd+bwd 75ms | 3278 samples/s
+    batch 2000/5215 | data 1ms | fwd+bwd 74ms | 3279 samples/s
+    batch 2020/5215 | data 1ms | fwd+bwd 73ms | 3279 samples/s
+    batch 2040/5215 | data 1ms | fwd+bwd 79ms | 3279 samples/s
+    batch 2060/5215 | data 1ms | fwd+bwd 77ms | 3280 samples/s
+    batch 2080/5215 | data 1ms | fwd+bwd 77ms | 3281 samples/s
+    batch 2100/5215 | data 1ms | fwd+bwd 77ms | 3281 samples/s
+    batch 2120/5215 | data 1ms | fwd+bwd 101ms | 3277 samples/s
+    batch 2140/5215 | data 1ms | fwd+bwd 79ms | 3278 samples/s
+    batch 2160/5215 | data 1ms | fwd+bwd 78ms | 3278 samples/s
+    batch 2180/5215 | data 1ms | fwd+bwd 75ms | 3279 samples/s
+    batch 2200/5215 | data 1ms | fwd+bwd 74ms | 3279 samples/s
+    batch 2220/5215 | data 1ms | fwd+bwd 79ms | 3279 samples/s
+    batch 2240/5215 | data 1ms | fwd+bwd 73ms | 3280 samples/s
+    batch 2260/5215 | data 1ms | fwd+bwd 74ms | 3281 samples/s
+    batch 2280/5215 | data 1ms | fwd+bwd 74ms | 3282 samples/s
+    batch 2300/5215 | data 1ms | fwd+bwd 74ms | 3282 samples/s
+    batch 2320/5215 | data 1ms | fwd+bwd 79ms | 3283 samples/s
+    batch 2340/5215 | data 1ms | fwd+bwd 78ms | 3284 samples/s
+    batch 2360/5215 | data 1ms | fwd+bwd 74ms | 3284 samples/s
+    batch 2380/5215 | data 1ms | fwd+bwd 77ms | 3285 samples/s
+    batch 2400/5215 | data 1ms | fwd+bwd 78ms | 3285 samples/s
+    batch 2420/5215 | data 1ms | fwd+bwd 77ms | 3286 samples/s
+    batch 2440/5215 | data 1ms | fwd+bwd 74ms | 3286 samples/s
+    batch 2460/5215 | data 1ms | fwd+bwd 79ms | 3287 samples/s
+    batch 2480/5215 | data 1ms | fwd+bwd 75ms | 3287 samples/s
+    batch 2500/5215 | data 1ms | fwd+bwd 75ms | 3288 samples/s
+    batch 2520/5215 | data 5ms | fwd+bwd 71ms | 3288 samples/s
+    batch 2540/5215 | data 1ms | fwd+bwd 76ms | 3288 samples/s
+    batch 2560/5215 | data 1ms | fwd+bwd 77ms | 3289 samples/s
+    batch 2580/5215 | data 1ms | fwd+bwd 75ms | 3289 samples/s
+    batch 2600/5215 | data 1ms | fwd+bwd 76ms | 3290 samples/s
+    batch 2620/5215 | data 1ms | fwd+bwd 75ms | 3290 samples/s
+    batch 2640/5215 | data 1ms | fwd+bwd 80ms | 3290 samples/s
+    batch 2660/5215 | data 2ms | fwd+bwd 74ms | 3290 samples/s
+    batch 2680/5215 | data 1ms | fwd+bwd 77ms | 3290 samples/s
+    batch 2700/5215 | data 1ms | fwd+bwd 77ms | 3290 samples/s
+    batch 2720/5215 | data 1ms | fwd+bwd 75ms | 3291 samples/s
+    batch 2740/5215 | data 1ms | fwd+bwd 72ms | 3291 samples/s
+    batch 2760/5215 | data 1ms | fwd+bwd 74ms | 3291 samples/s
+    batch 2780/5215 | data 1ms | fwd+bwd 72ms | 3292 samples/s
+    batch 2800/5215 | data 1ms | fwd+bwd 77ms | 3292 samples/s
+    batch 2820/5215 | data 1ms | fwd+bwd 96ms | 3289 samples/s
+    batch 2840/5215 | data 1ms | fwd+bwd 75ms | 3289 samples/s
+    batch 2860/5215 | data 1ms | fwd+bwd 78ms | 3290 samples/s
+    batch 2880/5215 | data 1ms | fwd+bwd 75ms | 3290 samples/s
+    batch 2900/5215 | data 1ms | fwd+bwd 76ms | 3290 samples/s
+    batch 2920/5215 | data 1ms | fwd+bwd 81ms | 3290 samples/s
+    batch 2940/5215 | data 1ms | fwd+bwd 77ms | 3290 samples/s
+    batch 2960/5215 | data 1ms | fwd+bwd 80ms | 3290 samples/s
+    batch 2980/5215 | data 1ms | fwd+bwd 76ms | 3291 samples/s
+    batch 3000/5215 | data 1ms | fwd+bwd 77ms | 3291 samples/s
+    batch 3020/5215 | data 1ms | fwd+bwd 77ms | 3291 samples/s
+    batch 3040/5215 | data 1ms | fwd+bwd 75ms | 3292 samples/s
+    batch 3060/5215 | data 1ms | fwd+bwd 74ms | 3292 samples/s
+    batch 3080/5215 | data 1ms | fwd+bwd 75ms | 3292 samples/s
+    batch 3100/5215 | data 1ms | fwd+bwd 73ms | 3292 samples/s
+    batch 3120/5215 | data 1ms | fwd+bwd 79ms | 3292 samples/s
+    batch 3140/5215 | data 1ms | fwd+bwd 78ms | 3292 samples/s
+    batch 3160/5215 | data 1ms | fwd+bwd 74ms | 3293 samples/s
+    batch 3180/5215 | data 1ms | fwd+bwd 76ms | 3293 samples/s
+    batch 3200/5215 | data 1ms | fwd+bwd 76ms | 3293 samples/s
+    batch 3220/5215 | data 1ms | fwd+bwd 77ms | 3293 samples/s
+    batch 3240/5215 | data 1ms | fwd+bwd 74ms | 3293 samples/s
+    batch 3260/5215 | data 1ms | fwd+bwd 75ms | 3294 samples/s
+    batch 3280/5215 | data 1ms | fwd+bwd 76ms | 3294 samples/s
+    batch 3300/5215 | data 1ms | fwd+bwd 75ms | 3294 samples/s
+    batch 3320/5215 | data 1ms | fwd+bwd 78ms | 3294 samples/s
+    batch 3340/5215 | data 1ms | fwd+bwd 76ms | 3295 samples/s
+    batch 3360/5215 | data 1ms | fwd+bwd 78ms | 3295 samples/s
+    batch 3380/5215 | data 1ms | fwd+bwd 74ms | 3296 samples/s
+    batch 3400/5215 | data 1ms | fwd+bwd 72ms | 3296 samples/s
+    batch 3420/5215 | data 1ms | fwd+bwd 78ms | 3296 samples/s
+    batch 3440/5215 | data 1ms | fwd+bwd 76ms | 3296 samples/s
+    batch 3460/5215 | data 1ms | fwd+bwd 78ms | 3296 samples/s
+    batch 3480/5215 | data 1ms | fwd+bwd 76ms | 3297 samples/s
+    batch 3500/5215 | data 1ms | fwd+bwd 74ms | 3297 samples/s
+    batch 3520/5215 | data 1ms | fwd+bwd 80ms | 3297 samples/s
+    batch 3540/5215 | data 1ms | fwd+bwd 78ms | 3298 samples/s
+    batch 3560/5215 | data 1ms | fwd+bwd 74ms | 3298 samples/s
+    batch 3580/5215 | data 1ms | fwd+bwd 77ms | 3298 samples/s
+    batch 3600/5215 | data 1ms | fwd+bwd 71ms | 3298 samples/s
+    batch 3620/5215 | data 1ms | fwd+bwd 103ms | 3296 samples/s
+    batch 3640/5215 | data 1ms | fwd+bwd 80ms | 3295 samples/s
+    batch 3660/5215 | data 1ms | fwd+bwd 77ms | 3295 samples/s
+    batch 3680/5215 | data 1ms | fwd+bwd 77ms | 3295 samples/s
+    batch 3700/5215 | data 1ms | fwd+bwd 78ms | 3295 samples/s
+    batch 3720/5215 | data 1ms | fwd+bwd 78ms | 3295 samples/s
+    batch 3740/5215 | data 1ms | fwd+bwd 78ms | 3296 samples/s
+    batch 3760/5215 | data 1ms | fwd+bwd 75ms | 3296 samples/s
+    batch 3780/5215 | data 1ms | fwd+bwd 75ms | 3296 samples/s
+    batch 3800/5215 | data 0ms | fwd+bwd 70ms | 3297 samples/s
+    batch 3820/5215 | data 1ms | fwd+bwd 77ms | 3297 samples/s
+    batch 3840/5215 | data 2ms | fwd+bwd 78ms | 3297 samples/s
+    batch 3860/5215 | data 1ms | fwd+bwd 79ms | 3297 samples/s
+    batch 3880/5215 | data 1ms | fwd+bwd 78ms | 3297 samples/s
+    batch 3900/5215 | data 1ms | fwd+bwd 77ms | 3298 samples/s
+    batch 3920/5215 | data 1ms | fwd+bwd 75ms | 3298 samples/s
+    batch 3940/5215 | data 1ms | fwd+bwd 77ms | 3298 samples/s
+    batch 3960/5215 | data 1ms | fwd+bwd 76ms | 3298 samples/s
+    batch 3980/5215 | data 1ms | fwd+bwd 82ms | 3299 samples/s
+    batch 4000/5215 | data 1ms | fwd+bwd 84ms | 3299 samples/s
+    batch 4020/5215 | data 1ms | fwd+bwd 78ms | 3299 samples/s
+    batch 4040/5215 | data 1ms | fwd+bwd 72ms | 3300 samples/s
+    batch 4060/5215 | data 1ms | fwd+bwd 75ms | 3300 samples/s
+    batch 4080/5215 | data 1ms | fwd+bwd 71ms | 3300 samples/s
+    batch 4100/5215 | data 1ms | fwd+bwd 81ms | 3301 samples/s
+    batch 4120/5215 | data 1ms | fwd+bwd 89ms | 3299 samples/s
+    batch 4140/5215 | data 1ms | fwd+bwd 78ms | 3299 samples/s
+    batch 4160/5215 | data 1ms | fwd+bwd 79ms | 3299 samples/s
+    batch 4180/5215 | data 1ms | fwd+bwd 80ms | 3300 samples/s
+    batch 4200/5215 | data 1ms | fwd+bwd 73ms | 3300 samples/s
+    batch 4220/5215 | data 0ms | fwd+bwd 77ms | 3300 samples/s
+    batch 4240/5215 | data 0ms | fwd+bwd 81ms | 3300 samples/s
+    batch 4260/5215 | data 1ms | fwd+bwd 74ms | 3301 samples/s
+    batch 4280/5215 | data 1ms | fwd+bwd 76ms | 3301 samples/s
+    batch 4300/5215 | data 1ms | fwd+bwd 80ms | 3301 samples/s
+    batch 4320/5215 | data 1ms | fwd+bwd 79ms | 3301 samples/s
+    batch 4340/5215 | data 1ms | fwd+bwd 79ms | 3301 samples/s
+    batch 4360/5215 | data 1ms | fwd+bwd 72ms | 3301 samples/s
+    batch 4380/5215 | data 1ms | fwd+bwd 76ms | 3301 samples/s
+    batch 4400/5215 | data 1ms | fwd+bwd 77ms | 3302 samples/s
+    batch 4420/5215 | data 0ms | fwd+bwd 72ms | 3302 samples/s
+    batch 4440/5215 | data 1ms | fwd+bwd 73ms | 3302 samples/s
+    batch 4460/5215 | data 1ms | fwd+bwd 75ms | 3302 samples/s
+    batch 4480/5215 | data 1ms | fwd+bwd 78ms | 3302 samples/s
+    batch 4500/5215 | data 1ms | fwd+bwd 79ms | 3302 samples/s
+    batch 4520/5215 | data 1ms | fwd+bwd 74ms | 3302 samples/s
+    batch 4540/5215 | data 1ms | fwd+bwd 85ms | 3302 samples/s
+    batch 4560/5215 | data 1ms | fwd+bwd 74ms | 3302 samples/s
+    batch 4580/5215 | data 1ms | fwd+bwd 79ms | 3302 samples/s
+    batch 4600/5215 | data 0ms | fwd+bwd 75ms | 3303 samples/s
+    batch 4620/5215 | data 0ms | fwd+bwd 80ms | 3303 samples/s
+    batch 4640/5215 | data 0ms | fwd+bwd 76ms | 3303 samples/s
+    batch 4660/5215 | data 1ms | fwd+bwd 73ms | 3303 samples/s
+    batch 4680/5215 | data 1ms | fwd+bwd 73ms | 3303 samples/s
+    batch 4700/5215 | data 1ms | fwd+bwd 77ms | 3303 samples/s
+    batch 4720/5215 | data 1ms | fwd+bwd 80ms | 3303 samples/s
+    batch 4740/5215 | data 1ms | fwd+bwd 74ms | 3304 samples/s
+    batch 4760/5215 | data 1ms | fwd+bwd 79ms | 3304 samples/s
+    batch 4780/5215 | data 1ms | fwd+bwd 79ms | 3304 samples/s
+    batch 4800/5215 | data 1ms | fwd+bwd 81ms | 3304 samples/s
+    batch 4820/5215 | data 0ms | fwd+bwd 78ms | 3304 samples/s
+    batch 4840/5215 | data 0ms | fwd+bwd 73ms | 3305 samples/s
+    batch 4860/5215 | data 0ms | fwd+bwd 76ms | 3305 samples/s
+    batch 4880/5215 | data 0ms | fwd+bwd 76ms | 3305 samples/s
+    batch 4900/5215 | data 0ms | fwd+bwd 72ms | 3305 samples/s
+    batch 4920/5215 | data 1ms | fwd+bwd 73ms | 3306 samples/s
+    batch 4940/5215 | data 1ms | fwd+bwd 77ms | 3306 samples/s
+    batch 4960/5215 | data 1ms | fwd+bwd 74ms | 3306 samples/s
+    batch 4980/5215 | data 1ms | fwd+bwd 76ms | 3306 samples/s
+    batch 5000/5215 | data 0ms | fwd+bwd 73ms | 3306 samples/s
+    batch 5020/5215 | data 1ms | fwd+bwd 76ms | 3306 samples/s
+    batch 5040/5215 | data 0ms | fwd+bwd 73ms | 3307 samples/s
+    batch 5060/5215 | data 0ms | fwd+bwd 75ms | 3307 samples/s
+    batch 5080/5215 | data 0ms | fwd+bwd 78ms | 3307 samples/s
+    batch 5100/5215 | data 0ms | fwd+bwd 76ms | 3307 samples/s
+    batch 5120/5215 | data 0ms | fwd+bwd 73ms | 3307 samples/s
+    batch 5140/5215 | data 0ms | fwd+bwd 83ms | 3307 samples/s
+    batch 5160/5215 | data 0ms | fwd+bwd 76ms | 3307 samples/s
+    batch 5180/5215 | data 0ms | fwd+bwd 78ms | 3307 samples/s
+    batch 5200/5215 | data 220ms | fwd+bwd 9ms | 3306 samples/s
+  [5/5] Epoch done: 5215 batches in 403.5s
+  Epoch time: 403.51s, Data load: 0.84ms/batch, Throughput: 3309 samples/s
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 9345976 samples, 200000 classes (1.0s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~5215 batches)...
+    batch 20/5215 | data 0ms | fwd+bwd 91ms | 1706 samples/s
+    batch 40/5215 | data 0ms | fwd+bwd 73ms | 2198 samples/s
+    batch 60/5215 | data 0ms | fwd+bwd 73ms | 2477 samples/s
+    batch 80/5215 | data 1ms | fwd+bwd 72ms | 2652 samples/s
+    batch 100/5215 | data 1ms | fwd+bwd 81ms | 2770 samples/s
+    batch 120/5215 | data 1ms | fwd+bwd 77ms | 2854 samples/s
+    batch 140/5215 | data 1ms | fwd+bwd 76ms | 2921 samples/s
+    batch 160/5215 | data 0ms | fwd+bwd 81ms | 2968 samples/s
+    batch 180/5215 | data 1ms | fwd+bwd 78ms | 3005 samples/s
+    batch 200/5215 | data 1ms | fwd+bwd 77ms | 3036 samples/s
+    batch 220/5215 | data 1ms | fwd+bwd 76ms | 3063 samples/s
+    batch 240/5215 | data 1ms | fwd+bwd 77ms | 3086 samples/s
+    batch 260/5215 | data 1ms | fwd+bwd 75ms | 3106 samples/s
+    batch 280/5215 | data 1ms | fwd+bwd 73ms | 3124 samples/s
+    batch 300/5215 | data 1ms | fwd+bwd 78ms | 3138 samples/s
+    batch 320/5215 | data 1ms | fwd+bwd 76ms | 3149 samples/s
+    batch 340/5215 | data 1ms | fwd+bwd 75ms | 3163 samples/s
+    batch 360/5215 | data 1ms | fwd+bwd 79ms | 3172 samples/s
+    batch 380/5215 | data 1ms | fwd+bwd 79ms | 3180 samples/s
+    batch 400/5215 | data 1ms | fwd+bwd 80ms | 3187 samples/s
+    batch 420/5215 | data 0ms | fwd+bwd 74ms | 3196 samples/s
+    batch 440/5215 | data 1ms | fwd+bwd 74ms | 3203 samples/s
+    batch 460/5215 | data 1ms | fwd+bwd 77ms | 3209 samples/s
+    batch 480/5215 | data 1ms | fwd+bwd 77ms | 3215 samples/s
+    batch 500/5215 | data 1ms | fwd+bwd 83ms | 3221 samples/s
+    batch 520/5215 | data 0ms | fwd+bwd 75ms | 3221 samples/s
+    batch 540/5215 | data 1ms | fwd+bwd 73ms | 3226 samples/s
+    batch 560/5215 | data 1ms | fwd+bwd 73ms | 3230 samples/s
+    batch 580/5215 | data 1ms | fwd+bwd 80ms | 3234 samples/s
+    batch 600/5215 | data 0ms | fwd+bwd 80ms | 3238 samples/s
+    batch 620/5215 | data 1ms | fwd+bwd 77ms | 3242 samples/s
+    batch 640/5215 | data 1ms | fwd+bwd 73ms | 3245 samples/s
+    batch 660/5215 | data 1ms | fwd+bwd 79ms | 3248 samples/s
+    batch 680/5215 | data 1ms | fwd+bwd 73ms | 3251 samples/s
+    batch 700/5215 | data 1ms | fwd+bwd 76ms | 3253 samples/s
+    batch 720/5215 | data 1ms | fwd+bwd 76ms | 3255 samples/s
+    batch 740/5215 | data 1ms | fwd+bwd 75ms | 3257 samples/s
+    batch 760/5215 | data 1ms | fwd+bwd 78ms | 3260 samples/s
+    batch 780/5215 | data 1ms | fwd+bwd 80ms | 3263 samples/s
+    batch 800/5215 | data 1ms | fwd+bwd 76ms | 3264 samples/s
+    batch 820/5215 | data 1ms | fwd+bwd 78ms | 3266 samples/s
+    batch 840/5215 | data 1ms | fwd+bwd 72ms | 3268 samples/s
+    batch 860/5215 | data 0ms | fwd+bwd 76ms | 3270 samples/s
+    batch 880/5215 | data 1ms | fwd+bwd 78ms | 3272 samples/s
+    batch 900/5215 | data 1ms | fwd+bwd 77ms | 3274 samples/s
+    batch 920/5215 | data 1ms | fwd+bwd 73ms | 3276 samples/s
+    batch 940/5215 | data 0ms | fwd+bwd 72ms | 3277 samples/s
+    batch 960/5215 | data 1ms | fwd+bwd 74ms | 3279 samples/s
+    batch 980/5215 | data 0ms | fwd+bwd 76ms | 3280 samples/s
+    batch 1000/5215 | data 1ms | fwd+bwd 78ms | 3282 samples/s
+    batch 1020/5215 | data 1ms | fwd+bwd 76ms | 3284 samples/s
+    batch 1040/5215 | data 1ms | fwd+bwd 75ms | 3287 samples/s
+    batch 1060/5215 | data 1ms | fwd+bwd 77ms | 3289 samples/s
+    batch 1080/5215 | data 1ms | fwd+bwd 74ms | 3291 samples/s
+    batch 1100/5215 | data 1ms | fwd+bwd 79ms | 3293 samples/s
+    batch 1120/5215 | data 1ms | fwd+bwd 73ms | 3295 samples/s
+    batch 1140/5215 | data 1ms | fwd+bwd 72ms | 3297 samples/s
+    batch 1160/5215 | data 1ms | fwd+bwd 76ms | 3299 samples/s
+    batch 1180/5215 | data 1ms | fwd+bwd 74ms | 3300 samples/s
+    batch 1200/5215 | data 1ms | fwd+bwd 76ms | 3302 samples/s
+    batch 1220/5215 | data 1ms | fwd+bwd 78ms | 3304 samples/s
+    batch 1240/5215 | data 1ms | fwd+bwd 77ms | 3305 samples/s
+    batch 1260/5215 | data 1ms | fwd+bwd 81ms | 3306 samples/s
+    batch 1280/5215 | data 1ms | fwd+bwd 78ms | 3307 samples/s
+    batch 1300/5215 | data 1ms | fwd+bwd 83ms | 3307 samples/s
+    batch 1320/5215 | data 1ms | fwd+bwd 75ms | 3309 samples/s
+    batch 1340/5215 | data 1ms | fwd+bwd 78ms | 3310 samples/s
+    batch 1360/5215 | data 1ms | fwd+bwd 75ms | 3311 samples/s
+    batch 1380/5215 | data 0ms | fwd+bwd 75ms | 3312 samples/s
+    batch 1400/5215 | data 0ms | fwd+bwd 77ms | 3313 samples/s
+    batch 1420/5215 | data 1ms | fwd+bwd 74ms | 3314 samples/s
+    batch 1440/5215 | data 1ms | fwd+bwd 75ms | 3315 samples/s
+    batch 1460/5215 | data 1ms | fwd+bwd 73ms | 3316 samples/s
+    batch 1480/5215 | data 1ms | fwd+bwd 72ms | 3316 samples/s
+    batch 1500/5215 | data 1ms | fwd+bwd 79ms | 3317 samples/s
+    batch 1520/5215 | data 1ms | fwd+bwd 82ms | 3319 samples/s
+    batch 1540/5215 | data 1ms | fwd+bwd 76ms | 3319 samples/s
+    batch 1560/5215 | data 1ms | fwd+bwd 74ms | 3320 samples/s
+    batch 1580/5215 | data 1ms | fwd+bwd 77ms | 3320 samples/s
+    batch 1600/5215 | data 0ms | fwd+bwd 81ms | 3321 samples/s
+    batch 1620/5215 | data 0ms | fwd+bwd 74ms | 3322 samples/s
+    batch 1640/5215 | data 1ms | fwd+bwd 76ms | 3323 samples/s
+    batch 1660/5215 | data 1ms | fwd+bwd 81ms | 3324 samples/s
+    batch 1680/5215 | data 1ms | fwd+bwd 77ms | 3324 samples/s
+    batch 1700/5215 | data 1ms | fwd+bwd 75ms | 3325 samples/s
+    batch 1720/5215 | data 1ms | fwd+bwd 74ms | 3324 samples/s
+    batch 1740/5215 | data 0ms | fwd+bwd 73ms | 3325 samples/s
+    batch 1760/5215 | data 0ms | fwd+bwd 76ms | 3326 samples/s
+    batch 1780/5215 | data 0ms | fwd+bwd 78ms | 3327 samples/s
+    batch 1800/5215 | data 0ms | fwd+bwd 80ms | 3328 samples/s
+    batch 1820/5215 | data 1ms | fwd+bwd 78ms | 3328 samples/s
+    batch 1840/5215 | data 1ms | fwd+bwd 71ms | 3328 samples/s
+    batch 1860/5215 | data 1ms | fwd+bwd 71ms | 3329 samples/s
+    batch 1880/5215 | data 1ms | fwd+bwd 77ms | 3330 samples/s
+    batch 1900/5215 | data 1ms | fwd+bwd 79ms | 3330 samples/s
+    batch 1920/5215 | data 1ms | fwd+bwd 77ms | 3332 samples/s
+    batch 1940/5215 | data 1ms | fwd+bwd 75ms | 3332 samples/s
+    batch 1960/5215 | data 1ms | fwd+bwd 75ms | 3333 samples/s
+    batch 1980/5215 | data 1ms | fwd+bwd 74ms | 3333 samples/s
+    batch 2000/5215 | data 1ms | fwd+bwd 78ms | 3333 samples/s
+    batch 2020/5215 | data 1ms | fwd+bwd 72ms | 3334 samples/s
+    batch 2040/5215 | data 1ms | fwd+bwd 74ms | 3334 samples/s
+    batch 2060/5215 | data 0ms | fwd+bwd 73ms | 3334 samples/s
+    batch 2080/5215 | data 1ms | fwd+bwd 73ms | 3335 samples/s
+    batch 2100/5215 | data 1ms | fwd+bwd 76ms | 3335 samples/s
+    batch 2120/5215 | data 1ms | fwd+bwd 81ms | 3335 samples/s
+    batch 2140/5215 | data 1ms | fwd+bwd 78ms | 3335 samples/s
+    batch 2160/5215 | data 1ms | fwd+bwd 77ms | 3336 samples/s
+    batch 2180/5215 | data 1ms | fwd+bwd 80ms | 3336 samples/s
+    batch 2200/5215 | data 1ms | fwd+bwd 76ms | 3337 samples/s
+    batch 2220/5215 | data 1ms | fwd+bwd 73ms | 3338 samples/s
+    batch 2240/5215 | data 0ms | fwd+bwd 72ms | 3338 samples/s
+    batch 2260/5215 | data 1ms | fwd+bwd 77ms | 3338 samples/s
+    batch 2280/5215 | data 1ms | fwd+bwd 74ms | 3339 samples/s
+    batch 2300/5215 | data 1ms | fwd+bwd 78ms | 3339 samples/s
+    batch 2320/5215 | data 0ms | fwd+bwd 72ms | 3340 samples/s
+    batch 2340/5215 | data 0ms | fwd+bwd 80ms | 3340 samples/s
+    batch 2360/5215 | data 1ms | fwd+bwd 73ms | 3341 samples/s
+    batch 2380/5215 | data 1ms | fwd+bwd 74ms | 3341 samples/s
+    batch 2400/5215 | data 1ms | fwd+bwd 77ms | 3341 samples/s
+    batch 2420/5215 | data 1ms | fwd+bwd 72ms | 3339 samples/s
+    batch 2440/5215 | data 1ms | fwd+bwd 73ms | 3339 samples/s
+    batch 2460/5215 | data 1ms | fwd+bwd 74ms | 3340 samples/s
+    batch 2480/5215 | data 1ms | fwd+bwd 77ms | 3340 samples/s
+    batch 2500/5215 | data 1ms | fwd+bwd 82ms | 3340 samples/s
+    batch 2520/5215 | data 1ms | fwd+bwd 75ms | 3341 samples/s
+    batch 2540/5215 | data 1ms | fwd+bwd 75ms | 3341 samples/s
+    batch 2560/5215 | data 1ms | fwd+bwd 75ms | 3341 samples/s
+    batch 2580/5215 | data 1ms | fwd+bwd 74ms | 3342 samples/s
+    batch 2600/5215 | data 1ms | fwd+bwd 76ms | 3342 samples/s
+    batch 2620/5215 | data 1ms | fwd+bwd 79ms | 3342 samples/s
+    batch 2640/5215 | data 1ms | fwd+bwd 76ms | 3343 samples/s
+    batch 2660/5215 | data 1ms | fwd+bwd 76ms | 3343 samples/s
+    batch 2680/5215 | data 0ms | fwd+bwd 76ms | 3343 samples/s
+    batch 2700/5215 | data 1ms | fwd+bwd 79ms | 3343 samples/s
+    batch 2720/5215 | data 0ms | fwd+bwd 80ms | 3344 samples/s
+    batch 2740/5215 | data 1ms | fwd+bwd 73ms | 3344 samples/s
+    batch 2760/5215 | data 1ms | fwd+bwd 72ms | 3344 samples/s
+    batch 2780/5215 | data 1ms | fwd+bwd 77ms | 3345 samples/s
+    batch 2800/5215 | data 1ms | fwd+bwd 76ms | 3345 samples/s
+    batch 2820/5215 | data 0ms | fwd+bwd 75ms | 3346 samples/s
+    batch 2840/5215 | data 1ms | fwd+bwd 74ms | 3346 samples/s
+    batch 2860/5215 | data 1ms | fwd+bwd 74ms | 3346 samples/s
+    batch 2880/5215 | data 1ms | fwd+bwd 80ms | 3346 samples/s
+    batch 2900/5215 | data 1ms | fwd+bwd 78ms | 3346 samples/s
+    batch 2920/5215 | data 1ms | fwd+bwd 74ms | 3346 samples/s
+    batch 2940/5215 | data 1ms | fwd+bwd 74ms | 3346 samples/s
+    batch 2960/5215 | data 0ms | fwd+bwd 74ms | 3347 samples/s
+    batch 2980/5215 | data 1ms | fwd+bwd 77ms | 3347 samples/s
+    batch 3000/5215 | data 0ms | fwd+bwd 74ms | 3347 samples/s
+    batch 3020/5215 | data 0ms | fwd+bwd 76ms | 3348 samples/s
+    batch 3040/5215 | data 0ms | fwd+bwd 78ms | 3348 samples/s
+    batch 3060/5215 | data 0ms | fwd+bwd 74ms | 3349 samples/s
+    batch 3080/5215 | data 0ms | fwd+bwd 76ms | 3349 samples/s
+    batch 3100/5215 | data 0ms | fwd+bwd 74ms | 3349 samples/s
+    batch 3120/5215 | data 0ms | fwd+bwd 74ms | 3350 samples/s
+    batch 3140/5215 | data 0ms | fwd+bwd 72ms | 3350 samples/s
+    batch 3160/5215 | data 0ms | fwd+bwd 82ms | 3350 samples/s
+    batch 3180/5215 | data 0ms | fwd+bwd 74ms | 3351 samples/s
+    batch 3200/5215 | data 0ms | fwd+bwd 74ms | 3351 samples/s
+    batch 3220/5215 | data 0ms | fwd+bwd 76ms | 3352 samples/s
+    batch 3240/5215 | data 0ms | fwd+bwd 77ms | 3352 samples/s
+    batch 3260/5215 | data 0ms | fwd+bwd 75ms | 3353 samples/s
+    batch 3280/5215 | data 0ms | fwd+bwd 76ms | 3353 samples/s
+    batch 3300/5215 | data 1ms | fwd+bwd 77ms | 3354 samples/s
+    batch 3320/5215 | data 0ms | fwd+bwd 73ms | 3353 samples/s
+    batch 3340/5215 | data 1ms | fwd+bwd 70ms | 3353 samples/s
+    batch 3360/5215 | data 1ms | fwd+bwd 72ms | 3354 samples/s
+    batch 3380/5215 | data 1ms | fwd+bwd 73ms | 3354 samples/s
+    batch 3400/5215 | data 1ms | fwd+bwd 83ms | 3354 samples/s
+    batch 3420/5215 | data 1ms | fwd+bwd 76ms | 3354 samples/s
+    batch 3440/5215 | data 1ms | fwd+bwd 76ms | 3355 samples/s
+    batch 3460/5215 | data 1ms | fwd+bwd 74ms | 3355 samples/s
+    batch 3480/5215 | data 1ms | fwd+bwd 74ms | 3355 samples/s
+    batch 3500/5215 | data 1ms | fwd+bwd 77ms | 3356 samples/s
+    batch 3520/5215 | data 1ms | fwd+bwd 75ms | 3356 samples/s
+    batch 3540/5215 | data 1ms | fwd+bwd 75ms | 3356 samples/s
+    batch 3560/5215 | data 1ms | fwd+bwd 74ms | 3356 samples/s
+    batch 3580/5215 | data 1ms | fwd+bwd 74ms | 3356 samples/s
+    batch 3600/5215 | data 0ms | fwd+bwd 78ms | 3357 samples/s
+    batch 3620/5215 | data 1ms | fwd+bwd 74ms | 3357 samples/s
+    batch 3640/5215 | data 1ms | fwd+bwd 71ms | 3357 samples/s
+    batch 3660/5215 | data 1ms | fwd+bwd 77ms | 3358 samples/s
+    batch 3680/5215 | data 0ms | fwd+bwd 76ms | 3358 samples/s
+    batch 3700/5215 | data 0ms | fwd+bwd 76ms | 3358 samples/s
+    batch 3720/5215 | data 0ms | fwd+bwd 84ms | 3358 samples/s
+    batch 3740/5215 | data 0ms | fwd+bwd 76ms | 3359 samples/s
+    batch 3760/5215 | data 0ms | fwd+bwd 74ms | 3359 samples/s
+    batch 3780/5215 | data 0ms | fwd+bwd 77ms | 3359 samples/s
+    batch 3800/5215 | data 1ms | fwd+bwd 80ms | 3359 samples/s
+    batch 3820/5215 | data 1ms | fwd+bwd 71ms | 3360 samples/s
+    batch 3840/5215 | data 1ms | fwd+bwd 72ms | 3360 samples/s
+    batch 3860/5215 | data 0ms | fwd+bwd 70ms | 3360 samples/s
+    batch 3880/5215 | data 0ms | fwd+bwd 74ms | 3361 samples/s
+    batch 3900/5215 | data 0ms | fwd+bwd 76ms | 3361 samples/s
+    batch 3920/5215 | data 0ms | fwd+bwd 75ms | 3361 samples/s
+    batch 3940/5215 | data 0ms | fwd+bwd 76ms | 3361 samples/s
+    batch 3960/5215 | data 0ms | fwd+bwd 73ms | 3362 samples/s
+    batch 3980/5215 | data 0ms | fwd+bwd 73ms | 3362 samples/s
+    batch 4000/5215 | data 0ms | fwd+bwd 75ms | 3362 samples/s
+    batch 4020/5215 | data 0ms | fwd+bwd 76ms | 3361 samples/s
+    batch 4040/5215 | data 0ms | fwd+bwd 77ms | 3361 samples/s
+    batch 4060/5215 | data 1ms | fwd+bwd 77ms | 3362 samples/s
+    batch 4080/5215 | data 1ms | fwd+bwd 75ms | 3362 samples/s
+    batch 4100/5215 | data 1ms | fwd+bwd 75ms | 3362 samples/s
+    batch 4120/5215 | data 1ms | fwd+bwd 77ms | 3362 samples/s
+    batch 4140/5215 | data 1ms | fwd+bwd 78ms | 3363 samples/s
+    batch 4160/5215 | data 0ms | fwd+bwd 71ms | 3363 samples/s
+    batch 4180/5215 | data 1ms | fwd+bwd 75ms | 3363 samples/s
+    batch 4200/5215 | data 1ms | fwd+bwd 76ms | 3364 samples/s
+    batch 4220/5215 | data 1ms | fwd+bwd 73ms | 3364 samples/s
+    batch 4240/5215 | data 1ms | fwd+bwd 78ms | 3364 samples/s
+    batch 4260/5215 | data 1ms | fwd+bwd 74ms | 3365 samples/s
+    batch 4280/5215 | data 0ms | fwd+bwd 72ms | 3365 samples/s
+    batch 4300/5215 | data 0ms | fwd+bwd 73ms | 3365 samples/s
+    batch 4320/5215 | data 1ms | fwd+bwd 72ms | 3366 samples/s
+    batch 4340/5215 | data 1ms | fwd+bwd 77ms | 3366 samples/s
+    batch 4360/5215 | data 0ms | fwd+bwd 78ms | 3366 samples/s
+    batch 4380/5215 | data 0ms | fwd+bwd 73ms | 3367 samples/s
+    batch 4400/5215 | data 1ms | fwd+bwd 79ms | 3367 samples/s
+    batch 4420/5215 | data 1ms | fwd+bwd 77ms | 3367 samples/s
+    batch 4440/5215 | data 1ms | fwd+bwd 74ms | 3367 samples/s
+    batch 4460/5215 | data 1ms | fwd+bwd 75ms | 3367 samples/s
+    batch 4480/5215 | data 1ms | fwd+bwd 77ms | 3367 samples/s
+    batch 4500/5215 | data 1ms | fwd+bwd 79ms | 3367 samples/s
+    batch 4520/5215 | data 1ms | fwd+bwd 79ms | 3368 samples/s
+    batch 4540/5215 | data 0ms | fwd+bwd 74ms | 3368 samples/s
+    batch 4560/5215 | data 1ms | fwd+bwd 76ms | 3368 samples/s
+    batch 4580/5215 | data 1ms | fwd+bwd 73ms | 3368 samples/s
+    batch 4600/5215 | data 0ms | fwd+bwd 75ms | 3368 samples/s
+    batch 4620/5215 | data 1ms | fwd+bwd 70ms | 3368 samples/s
+    batch 4640/5215 | data 1ms | fwd+bwd 74ms | 3369 samples/s
+    batch 4660/5215 | data 0ms | fwd+bwd 75ms | 3369 samples/s
+    batch 4680/5215 | data 0ms | fwd+bwd 74ms | 3369 samples/s
+    batch 4700/5215 | data 1ms | fwd+bwd 77ms | 3370 samples/s
+    batch 4720/5215 | data 1ms | fwd+bwd 72ms | 3370 samples/s
+    batch 4740/5215 | data 1ms | fwd+bwd 77ms | 3370 samples/s
+    batch 4760/5215 | data 1ms | fwd+bwd 75ms | 3370 samples/s
+    batch 4780/5215 | data 1ms | fwd+bwd 75ms | 3371 samples/s
+    batch 4800/5215 | data 1ms | fwd+bwd 76ms | 3371 samples/s
+    batch 4820/5215 | data 1ms | fwd+bwd 73ms | 3371 samples/s
+    batch 4840/5215 | data 1ms | fwd+bwd 75ms | 3371 samples/s
+    batch 4860/5215 | data 1ms | fwd+bwd 75ms | 3372 samples/s
+    batch 4880/5215 | data 1ms | fwd+bwd 72ms | 3372 samples/s
+    batch 4900/5215 | data 1ms | fwd+bwd 77ms | 3372 samples/s
+    batch 4920/5215 | data 0ms | fwd+bwd 73ms | 3373 samples/s
+    batch 4940/5215 | data 1ms | fwd+bwd 75ms | 3373 samples/s
+    batch 4960/5215 | data 0ms | fwd+bwd 74ms | 3373 samples/s
+    batch 4980/5215 | data 1ms | fwd+bwd 73ms | 3373 samples/s
+    batch 5000/5215 | data 1ms | fwd+bwd 77ms | 3373 samples/s
+    batch 5020/5215 | data 1ms | fwd+bwd 75ms | 3374 samples/s
+    batch 5040/5215 | data 0ms | fwd+bwd 74ms | 3374 samples/s
+    batch 5060/5215 | data 0ms | fwd+bwd 75ms | 3374 samples/s
+    batch 5080/5215 | data 0ms | fwd+bwd 73ms | 3374 samples/s
+    batch 5100/5215 | data 0ms | fwd+bwd 77ms | 3375 samples/s
+    batch 5120/5215 | data 1ms | fwd+bwd 78ms | 3375 samples/s
+    batch 5140/5215 | data 1ms | fwd+bwd 72ms | 3375 samples/s
+    batch 5160/5215 | data 1ms | fwd+bwd 71ms | 3376 samples/s
+    batch 5180/5215 | data 1ms | fwd+bwd 78ms | 3376 samples/s
+    batch 5200/5215 | data 213ms | fwd+bwd 7ms | 3375 samples/s
+  [5/5] Epoch done: 5215 batches in 395.2s
+  Epoch time: 395.21s, Data load: 0.57ms/batch, Throughput: 3378 samples/s
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 9345976 samples, 200000 classes (5.7s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~5215 batches)...
+    batch 20/5215 | data 0ms | fwd+bwd 87ms | 685 samples/s
+    batch 40/5215 | data 0ms | fwd+bwd 72ms | 1138 samples/s
+    batch 60/5215 | data 0ms | fwd+bwd 77ms | 1462 samples/s
+    batch 80/5215 | data 1ms | fwd+bwd 73ms | 1707 samples/s
+    batch 100/5215 | data 0ms | fwd+bwd 77ms | 1898 samples/s
+    batch 120/5215 | data 1ms | fwd+bwd 71ms | 2051 samples/s
+    batch 140/5215 | data 1ms | fwd+bwd 78ms | 2176 samples/s
+    batch 160/5215 | data 1ms | fwd+bwd 71ms | 2281 samples/s
+    batch 180/5215 | data 0ms | fwd+bwd 73ms | 2369 samples/s
+    batch 200/5215 | data 1ms | fwd+bwd 75ms | 2446 samples/s
+    batch 220/5215 | data 1ms | fwd+bwd 76ms | 2514 samples/s
+    batch 240/5215 | data 1ms | fwd+bwd 72ms | 2573 samples/s
+    batch 260/5215 | data 1ms | fwd+bwd 71ms | 2624 samples/s
+    batch 280/5215 | data 1ms | fwd+bwd 75ms | 2669 samples/s
+    batch 300/5215 | data 1ms | fwd+bwd 78ms | 2710 samples/s
+    batch 320/5215 | data 1ms | fwd+bwd 78ms | 2746 samples/s
+    batch 340/5215 | data 1ms | fwd+bwd 75ms | 2778 samples/s
+    batch 360/5215 | data 1ms | fwd+bwd 70ms | 2808 samples/s
+    batch 380/5215 | data 1ms | fwd+bwd 70ms | 2837 samples/s
+    batch 400/5215 | data 1ms | fwd+bwd 75ms | 2860 samples/s
+    batch 420/5215 | data 0ms | fwd+bwd 71ms | 2884 samples/s
+    batch 440/5215 | data 1ms | fwd+bwd 69ms | 2905 samples/s
+    batch 460/5215 | data 1ms | fwd+bwd 68ms | 2926 samples/s
+    batch 480/5215 | data 1ms | fwd+bwd 74ms | 2946 samples/s
+    batch 500/5215 | data 1ms | fwd+bwd 84ms | 2959 samples/s
+    batch 520/5215 | data 1ms | fwd+bwd 74ms | 2975 samples/s
+    batch 540/5215 | data 0ms | fwd+bwd 75ms | 2989 samples/s
+    batch 560/5215 | data 1ms | fwd+bwd 78ms | 3002 samples/s
+    batch 580/5215 | data 1ms | fwd+bwd 78ms | 3016 samples/s
+    batch 600/5215 | data 1ms | fwd+bwd 76ms | 3028 samples/s
+    batch 620/5215 | data 0ms | fwd+bwd 76ms | 3040 samples/s
+    batch 640/5215 | data 1ms | fwd+bwd 74ms | 3052 samples/s
+    batch 660/5215 | data 1ms | fwd+bwd 73ms | 3063 samples/s
+    batch 680/5215 | data 0ms | fwd+bwd 71ms | 3074 samples/s
+    batch 700/5215 | data 0ms | fwd+bwd 76ms | 3083 samples/s
+    batch 720/5215 | data 1ms | fwd+bwd 74ms | 3092 samples/s
+    batch 740/5215 | data 1ms | fwd+bwd 74ms | 3101 samples/s
+    batch 760/5215 | data 0ms | fwd+bwd 73ms | 3109 samples/s
+    batch 780/5215 | data 0ms | fwd+bwd 79ms | 3115 samples/s
+    batch 800/5215 | data 1ms | fwd+bwd 77ms | 3121 samples/s
+    batch 820/5215 | data 1ms | fwd+bwd 71ms | 3128 samples/s
+    batch 840/5215 | data 0ms | fwd+bwd 74ms | 3135 samples/s
+    batch 860/5215 | data 0ms | fwd+bwd 70ms | 3141 samples/s
+    batch 880/5215 | data 0ms | fwd+bwd 74ms | 3147 samples/s
+    batch 900/5215 | data 1ms | fwd+bwd 73ms | 3153 samples/s
+    batch 920/5215 | data 1ms | fwd+bwd 76ms | 3159 samples/s
+    batch 940/5215 | data 1ms | fwd+bwd 77ms | 3164 samples/s
+    batch 960/5215 | data 0ms | fwd+bwd 76ms | 3169 samples/s
+    batch 980/5215 | data 1ms | fwd+bwd 71ms | 3175 samples/s
+    batch 1000/5215 | data 1ms | fwd+bwd 73ms | 3180 samples/s
+    batch 1020/5215 | data 1ms | fwd+bwd 73ms | 3185 samples/s
+    batch 1040/5215 | data 1ms | fwd+bwd 74ms | 3190 samples/s
+    batch 1060/5215 | data 1ms | fwd+bwd 78ms | 3194 samples/s
+    batch 1080/5215 | data 1ms | fwd+bwd 71ms | 3198 samples/s
+    batch 1100/5215 | data 1ms | fwd+bwd 76ms | 3203 samples/s
+    batch 1120/5215 | data 1ms | fwd+bwd 73ms | 3207 samples/s
+    batch 1140/5215 | data 1ms | fwd+bwd 72ms | 3211 samples/s
+    batch 1160/5215 | data 1ms | fwd+bwd 76ms | 3214 samples/s
+    batch 1180/5215 | data 1ms | fwd+bwd 73ms | 3218 samples/s
+    batch 1200/5215 | data 1ms | fwd+bwd 76ms | 3221 samples/s
+    batch 1220/5215 | data 1ms | fwd+bwd 73ms | 3225 samples/s
+    batch 1240/5215 | data 1ms | fwd+bwd 76ms | 3227 samples/s
+    batch 1260/5215 | data 1ms | fwd+bwd 78ms | 3230 samples/s
+    batch 1280/5215 | data 1ms | fwd+bwd 75ms | 3233 samples/s
+    batch 1300/5215 | data 1ms | fwd+bwd 79ms | 3235 samples/s
+    batch 1320/5215 | data 1ms | fwd+bwd 74ms | 3238 samples/s
+    batch 1340/5215 | data 1ms | fwd+bwd 75ms | 3240 samples/s
+    batch 1360/5215 | data 1ms | fwd+bwd 73ms | 3242 samples/s
+    batch 1380/5215 | data 1ms | fwd+bwd 78ms | 3244 samples/s
+    batch 1400/5215 | data 1ms | fwd+bwd 76ms | 3247 samples/s
+    batch 1420/5215 | data 0ms | fwd+bwd 77ms | 3249 samples/s
+    batch 1440/5215 | data 1ms | fwd+bwd 75ms | 3251 samples/s
+    batch 1460/5215 | data 1ms | fwd+bwd 74ms | 3253 samples/s
+    batch 1480/5215 | data 0ms | fwd+bwd 74ms | 3255 samples/s
+    batch 1500/5215 | data 1ms | fwd+bwd 77ms | 3256 samples/s
+    batch 1520/5215 | data 1ms | fwd+bwd 71ms | 3258 samples/s
+    batch 1540/5215 | data 1ms | fwd+bwd 76ms | 3260 samples/s
+    batch 1560/5215 | data 1ms | fwd+bwd 72ms | 3262 samples/s
+    batch 1580/5215 | data 1ms | fwd+bwd 76ms | 3263 samples/s
+    batch 1600/5215 | data 1ms | fwd+bwd 79ms | 3265 samples/s
+    batch 1620/5215 | data 1ms | fwd+bwd 76ms | 3267 samples/s
+    batch 1640/5215 | data 1ms | fwd+bwd 80ms | 3268 samples/s
+    batch 1660/5215 | data 1ms | fwd+bwd 72ms | 3270 samples/s
+    batch 1680/5215 | data 1ms | fwd+bwd 73ms | 3271 samples/s
+    batch 1700/5215 | data 1ms | fwd+bwd 74ms | 3273 samples/s
+    batch 1720/5215 | data 1ms | fwd+bwd 75ms | 3274 samples/s
+    batch 1740/5215 | data 1ms | fwd+bwd 74ms | 3275 samples/s
+    batch 1760/5215 | data 1ms | fwd+bwd 78ms | 3276 samples/s
+    batch 1780/5215 | data 1ms | fwd+bwd 73ms | 3278 samples/s
+    batch 1800/5215 | data 0ms | fwd+bwd 77ms | 3279 samples/s
+    batch 1820/5215 | data 0ms | fwd+bwd 82ms | 3280 samples/s
+    batch 1840/5215 | data 1ms | fwd+bwd 77ms | 3281 samples/s
+    batch 1860/5215 | data 1ms | fwd+bwd 71ms | 3283 samples/s
+    batch 1880/5215 | data 0ms | fwd+bwd 73ms | 3284 samples/s
+    batch 1900/5215 | data 0ms | fwd+bwd 77ms | 3285 samples/s
+    batch 1920/5215 | data 0ms | fwd+bwd 72ms | 3283 samples/s
+    batch 1940/5215 | data 0ms | fwd+bwd 77ms | 3284 samples/s
+    batch 1960/5215 | data 1ms | fwd+bwd 70ms | 3285 samples/s
+    batch 1980/5215 | data 1ms | fwd+bwd 77ms | 3286 samples/s
+    batch 2000/5215 | data 1ms | fwd+bwd 77ms | 3287 samples/s
+    batch 2020/5215 | data 1ms | fwd+bwd 81ms | 3288 samples/s
+    batch 2040/5215 | data 1ms | fwd+bwd 71ms | 3289 samples/s
+    batch 2060/5215 | data 0ms | fwd+bwd 75ms | 3290 samples/s
+    batch 2080/5215 | data 1ms | fwd+bwd 69ms | 3292 samples/s
+    batch 2100/5215 | data 1ms | fwd+bwd 73ms | 3293 samples/s
+    batch 2120/5215 | data 1ms | fwd+bwd 73ms | 3293 samples/s
+    batch 2140/5215 | data 1ms | fwd+bwd 73ms | 3294 samples/s
+    batch 2160/5215 | data 1ms | fwd+bwd 75ms | 3295 samples/s
+    batch 2180/5215 | data 1ms | fwd+bwd 72ms | 3296 samples/s
+    batch 2200/5215 | data 1ms | fwd+bwd 72ms | 3297 samples/s
+    batch 2220/5215 | data 1ms | fwd+bwd 86ms | 3298 samples/s
+    batch 2240/5215 | data 0ms | fwd+bwd 75ms | 3299 samples/s
+    batch 2260/5215 | data 0ms | fwd+bwd 78ms | 3300 samples/s
+    batch 2280/5215 | data 1ms | fwd+bwd 74ms | 3301 samples/s
+    batch 2300/5215 | data 1ms | fwd+bwd 77ms | 3302 samples/s
+    batch 2320/5215 | data 1ms | fwd+bwd 72ms | 3303 samples/s
+    batch 2340/5215 | data 1ms | fwd+bwd 78ms | 3304 samples/s
+    batch 2360/5215 | data 1ms | fwd+bwd 73ms | 3305 samples/s
+    batch 2380/5215 | data 1ms | fwd+bwd 79ms | 3305 samples/s
+    batch 2400/5215 | data 0ms | fwd+bwd 79ms | 3306 samples/s
+    batch 2420/5215 | data 1ms | fwd+bwd 109ms | 3304 samples/s
+    batch 2440/5215 | data 1ms | fwd+bwd 98ms | 3295 samples/s
+    batch 2460/5215 | data 1ms | fwd+bwd 80ms | 3295 samples/s
+    batch 2480/5215 | data 1ms | fwd+bwd 70ms | 3296 samples/s
+    batch 2500/5215 | data 1ms | fwd+bwd 80ms | 3297 samples/s
+    batch 2520/5215 | data 1ms | fwd+bwd 72ms | 3297 samples/s
+    batch 2540/5215 | data 1ms | fwd+bwd 74ms | 3298 samples/s
+    batch 2560/5215 | data 28ms | fwd+bwd 47ms | 3299 samples/s
+    batch 2580/5215 | data 1ms | fwd+bwd 71ms | 3300 samples/s
+    batch 2600/5215 | data 1ms | fwd+bwd 73ms | 3301 samples/s
+    batch 2620/5215 | data 1ms | fwd+bwd 104ms | 3299 samples/s
+    batch 2640/5215 | data 1ms | fwd+bwd 87ms | 3292 samples/s
+    batch 2660/5215 | data 1ms | fwd+bwd 71ms | 3293 samples/s
+    batch 2680/5215 | data 0ms | fwd+bwd 72ms | 3294 samples/s
+    batch 2700/5215 | data 1ms | fwd+bwd 72ms | 3295 samples/s
+    batch 2720/5215 | data 1ms | fwd+bwd 76ms | 3296 samples/s
+    batch 2740/5215 | data 1ms | fwd+bwd 70ms | 3297 samples/s
+    batch 2760/5215 | data 1ms | fwd+bwd 74ms | 3298 samples/s
+    batch 2780/5215 | data 0ms | fwd+bwd 69ms | 3299 samples/s
+    batch 2800/5215 | data 1ms | fwd+bwd 78ms | 3300 samples/s
+    batch 2820/5215 | data 1ms | fwd+bwd 76ms | 3301 samples/s
+    batch 2840/5215 | data 1ms | fwd+bwd 73ms | 3303 samples/s
+    batch 2860/5215 | data 1ms | fwd+bwd 72ms | 3304 samples/s
+    batch 2880/5215 | data 1ms | fwd+bwd 70ms | 3305 samples/s
+    batch 2900/5215 | data 1ms | fwd+bwd 72ms | 3306 samples/s
+    batch 2920/5215 | data 1ms | fwd+bwd 69ms | 3307 samples/s
+    batch 2940/5215 | data 1ms | fwd+bwd 71ms | 3309 samples/s
+    batch 2960/5215 | data 1ms | fwd+bwd 69ms | 3310 samples/s
+    batch 2980/5215 | data 0ms | fwd+bwd 73ms | 3311 samples/s
+    batch 3000/5215 | data 1ms | fwd+bwd 71ms | 3312 samples/s
+    batch 3020/5215 | data 1ms | fwd+bwd 69ms | 3313 samples/s
+    batch 3040/5215 | data 1ms | fwd+bwd 71ms | 3314 samples/s
+    batch 3060/5215 | data 1ms | fwd+bwd 73ms | 3316 samples/s
+    batch 3080/5215 | data 1ms | fwd+bwd 71ms | 3317 samples/s
+    batch 3100/5215 | data 0ms | fwd+bwd 75ms | 3318 samples/s
+    batch 3120/5215 | data 1ms | fwd+bwd 69ms | 3319 samples/s
+    batch 3140/5215 | data 1ms | fwd+bwd 78ms | 3320 samples/s
+    batch 3160/5215 | data 0ms | fwd+bwd 72ms | 3321 samples/s
+    batch 3180/5215 | data 1ms | fwd+bwd 73ms | 3323 samples/s
+    batch 3200/5215 | data 1ms | fwd+bwd 77ms | 3324 samples/s
+    batch 3220/5215 | data 1ms | fwd+bwd 73ms | 3325 samples/s
+    batch 3240/5215 | data 1ms | fwd+bwd 72ms | 3325 samples/s
+    batch 3260/5215 | data 1ms | fwd+bwd 72ms | 3326 samples/s
+    batch 3280/5215 | data 0ms | fwd+bwd 74ms | 3327 samples/s
+    batch 3300/5215 | data 0ms | fwd+bwd 73ms | 3328 samples/s
+    batch 3320/5215 | data 0ms | fwd+bwd 67ms | 3327 samples/s
+    batch 3340/5215 | data 0ms | fwd+bwd 73ms | 3328 samples/s
+    batch 3360/5215 | data 0ms | fwd+bwd 77ms | 3329 samples/s
+    batch 3380/5215 | data 1ms | fwd+bwd 70ms | 3330 samples/s
+    batch 3400/5215 | data 1ms | fwd+bwd 72ms | 3330 samples/s
+    batch 3420/5215 | data 0ms | fwd+bwd 75ms | 3331 samples/s
+    batch 3440/5215 | data 1ms | fwd+bwd 71ms | 3332 samples/s
+    batch 3460/5215 | data 1ms | fwd+bwd 77ms | 3332 samples/s
+    batch 3480/5215 | data 1ms | fwd+bwd 76ms | 3333 samples/s
+    batch 3500/5215 | data 0ms | fwd+bwd 74ms | 3334 samples/s
+    batch 3520/5215 | data 1ms | fwd+bwd 73ms | 3334 samples/s
+    batch 3540/5215 | data 1ms | fwd+bwd 74ms | 3335 samples/s
+    batch 3560/5215 | data 0ms | fwd+bwd 69ms | 3336 samples/s
+    batch 3580/5215 | data 0ms | fwd+bwd 73ms | 3336 samples/s
+    batch 3600/5215 | data 0ms | fwd+bwd 73ms | 3337 samples/s
+    batch 3620/5215 | data 0ms | fwd+bwd 78ms | 3338 samples/s
+    batch 3640/5215 | data 0ms | fwd+bwd 76ms | 3339 samples/s
+    batch 3660/5215 | data 0ms | fwd+bwd 73ms | 3339 samples/s
+    batch 3680/5215 | data 0ms | fwd+bwd 71ms | 3340 samples/s
+    batch 3700/5215 | data 0ms | fwd+bwd 71ms | 3341 samples/s
+    batch 3720/5215 | data 0ms | fwd+bwd 71ms | 3342 samples/s
+    batch 3740/5215 | data 0ms | fwd+bwd 77ms | 3342 samples/s
+    batch 3760/5215 | data 1ms | fwd+bwd 71ms | 3343 samples/s
+    batch 3780/5215 | data 0ms | fwd+bwd 71ms | 3344 samples/s
+    batch 3800/5215 | data 0ms | fwd+bwd 73ms | 3344 samples/s
+    batch 3820/5215 | data 0ms | fwd+bwd 76ms | 3345 samples/s
+    batch 3840/5215 | data 1ms | fwd+bwd 76ms | 3345 samples/s
+    batch 3860/5215 | data 1ms | fwd+bwd 76ms | 3346 samples/s
+    batch 3880/5215 | data 1ms | fwd+bwd 70ms | 3347 samples/s
+    batch 3900/5215 | data 0ms | fwd+bwd 79ms | 3347 samples/s
+    batch 3920/5215 | data 0ms | fwd+bwd 72ms | 3348 samples/s
+    batch 3940/5215 | data 1ms | fwd+bwd 77ms | 3348 samples/s
+    batch 3960/5215 | data 1ms | fwd+bwd 72ms | 3349 samples/s
+    batch 3980/5215 | data 1ms | fwd+bwd 71ms | 3349 samples/s
+    batch 4000/5215 | data 1ms | fwd+bwd 76ms | 3350 samples/s
+    batch 4020/5215 | data 1ms | fwd+bwd 72ms | 3351 samples/s
+    batch 4040/5215 | data 1ms | fwd+bwd 73ms | 3351 samples/s
+    batch 4060/5215 | data 1ms | fwd+bwd 76ms | 3351 samples/s
+    batch 4080/5215 | data 1ms | fwd+bwd 73ms | 3352 samples/s
+    batch 4100/5215 | data 0ms | fwd+bwd 78ms | 3352 samples/s
+    batch 4120/5215 | data 1ms | fwd+bwd 70ms | 3353 samples/s
+    batch 4140/5215 | data 1ms | fwd+bwd 71ms | 3353 samples/s
+    batch 4160/5215 | data 1ms | fwd+bwd 69ms | 3353 samples/s
+    batch 4180/5215 | data 1ms | fwd+bwd 71ms | 3354 samples/s
+    batch 4200/5215 | data 1ms | fwd+bwd 76ms | 3354 samples/s
+    batch 4220/5215 | data 1ms | fwd+bwd 72ms | 3353 samples/s
+    batch 4240/5215 | data 1ms | fwd+bwd 71ms | 3354 samples/s
+    batch 4260/5215 | data 1ms | fwd+bwd 74ms | 3355 samples/s
+    batch 4280/5215 | data 1ms | fwd+bwd 71ms | 3355 samples/s
+    batch 4300/5215 | data 1ms | fwd+bwd 78ms | 3356 samples/s
+    batch 4320/5215 | data 1ms | fwd+bwd 73ms | 3356 samples/s
+    batch 4340/5215 | data 1ms | fwd+bwd 75ms | 3357 samples/s
+    batch 4360/5215 | data 1ms | fwd+bwd 71ms | 3358 samples/s
+    batch 4380/5215 | data 1ms | fwd+bwd 73ms | 3358 samples/s
+    batch 4400/5215 | data 1ms | fwd+bwd 71ms | 3359 samples/s
+    batch 4420/5215 | data 0ms | fwd+bwd 71ms | 3359 samples/s
+    batch 4440/5215 | data 1ms | fwd+bwd 72ms | 3360 samples/s
+    batch 4460/5215 | data 1ms | fwd+bwd 69ms | 3361 samples/s
+    batch 4480/5215 | data 1ms | fwd+bwd 71ms | 3361 samples/s
+    batch 4500/5215 | data 1ms | fwd+bwd 73ms | 3362 samples/s
+    batch 4520/5215 | data 1ms | fwd+bwd 72ms | 3362 samples/s
+    batch 4540/5215 | data 0ms | fwd+bwd 72ms | 3363 samples/s
+    batch 4560/5215 | data 1ms | fwd+bwd 76ms | 3363 samples/s
+    batch 4580/5215 | data 0ms | fwd+bwd 73ms | 3364 samples/s
+    batch 4600/5215 | data 1ms | fwd+bwd 72ms | 3364 samples/s
+    batch 4620/5215 | data 1ms | fwd+bwd 76ms | 3365 samples/s
+    batch 4640/5215 | data 1ms | fwd+bwd 68ms | 3366 samples/s
+    batch 4660/5215 | data 1ms | fwd+bwd 72ms | 3366 samples/s
+    batch 4680/5215 | data 1ms | fwd+bwd 70ms | 3367 samples/s
+    batch 4700/5215 | data 0ms | fwd+bwd 71ms | 3367 samples/s
+    batch 4720/5215 | data 1ms | fwd+bwd 71ms | 3368 samples/s
+    batch 4740/5215 | data 1ms | fwd+bwd 71ms | 3368 samples/s
+    batch 4760/5215 | data 1ms | fwd+bwd 77ms | 3369 samples/s
+    batch 4780/5215 | data 0ms | fwd+bwd 71ms | 3369 samples/s
+    batch 4800/5215 | data 1ms | fwd+bwd 75ms | 3370 samples/s
+    batch 4820/5215 | data 1ms | fwd+bwd 73ms | 3370 samples/s
+    batch 4840/5215 | data 1ms | fwd+bwd 73ms | 3371 samples/s
+    batch 4860/5215 | data 1ms | fwd+bwd 72ms | 3371 samples/s
+    batch 4880/5215 | data 1ms | fwd+bwd 74ms | 3371 samples/s
+    batch 4900/5215 | data 0ms | fwd+bwd 75ms | 3372 samples/s
+    batch 4920/5215 | data 1ms | fwd+bwd 74ms | 3372 samples/s
+    batch 4940/5215 | data 1ms | fwd+bwd 73ms | 3372 samples/s
+    batch 4960/5215 | data 1ms | fwd+bwd 77ms | 3373 samples/s
+    batch 4980/5215 | data 1ms | fwd+bwd 79ms | 3373 samples/s
+    batch 5000/5215 | data 1ms | fwd+bwd 72ms | 3373 samples/s
+    batch 5020/5215 | data 1ms | fwd+bwd 74ms | 3374 samples/s
+    batch 5040/5215 | data 0ms | fwd+bwd 75ms | 3374 samples/s
+    batch 5060/5215 | data 1ms | fwd+bwd 77ms | 3374 samples/s
+    batch 5080/5215 | data 0ms | fwd+bwd 71ms | 3375 samples/s
+    batch 5100/5215 | data 0ms | fwd+bwd 77ms | 3375 samples/s
+    batch 5120/5215 | data 1ms | fwd+bwd 74ms | 3375 samples/s
+    batch 5140/5215 | data 0ms | fwd+bwd 73ms | 3376 samples/s
+    batch 5160/5215 | data 0ms | fwd+bwd 74ms | 3376 samples/s
+    batch 5180/5215 | data 0ms | fwd+bwd 73ms | 3376 samples/s
+    batch 5200/5215 | data 202ms | fwd+bwd 5ms | 3375 samples/s
+  [5/5] Epoch done: 5215 batches in 395.2s
+  Epoch time: 395.21s, Data load: 0.66ms/batch, Throughput: 3378 samples/s
+  [1/5] Creating dataset...
+  [1/5] Dataset ready: 9345976 samples, 200000 classes (1.1s)
+  [2/5] Creating DataLoader (workers=8)...
+  [2/5] DataLoader ready.
+  [3/5] Setting up model + classifier...
+  [3/5] Model ready on device.
+  [4/5] Training loop starting (~5215 batches)...
+    batch 20/5215 | data 0ms | fwd+bwd 87ms | 2300 samples/s
+    batch 40/5215 | data 0ms | fwd+bwd 74ms | 2694 samples/s
+    batch 60/5215 | data 0ms | fwd+bwd 74ms | 2904 samples/s
+    batch 80/5215 | data 1ms | fwd+bwd 75ms | 3014 samples/s
+    batch 100/5215 | data 0ms | fwd+bwd 77ms | 3090 samples/s
+    batch 120/5215 | data 1ms | fwd+bwd 76ms | 3144 samples/s
+    batch 140/5215 | data 1ms | fwd+bwd 77ms | 3182 samples/s
+    batch 160/5215 | data 1ms | fwd+bwd 76ms | 3214 samples/s
+    batch 180/5215 | data 1ms | fwd+bwd 73ms | 3236 samples/s
+    batch 200/5215 | data 0ms | fwd+bwd 75ms | 3256 samples/s
+    batch 220/5215 | data 0ms | fwd+bwd 71ms | 3271 samples/s
+    batch 240/5215 | data 1ms | fwd+bwd 75ms | 3283 samples/s
+    batch 260/5215 | data 1ms | fwd+bwd 71ms | 3292 samples/s
+    batch 280/5215 | data 1ms | fwd+bwd 75ms | 3303 samples/s
+    batch 300/5215 | data 0ms | fwd+bwd 82ms | 3310 samples/s
+    batch 320/5215 | data 1ms | fwd+bwd 75ms | 3320 samples/s
+    batch 340/5215 | data 0ms | fwd+bwd 84ms | 3327 samples/s
+    batch 360/5215 | data 1ms | fwd+bwd 75ms | 3333 samples/s
+    batch 380/5215 | data 1ms | fwd+bwd 71ms | 3337 samples/s
+    batch 400/5215 | data 1ms | fwd+bwd 74ms | 3342 samples/s
+    batch 420/5215 | data 1ms | fwd+bwd 75ms | 3347 samples/s
+    batch 440/5215 | data 0ms | fwd+bwd 72ms | 3348 samples/s
+    batch 460/5215 | data 1ms | fwd+bwd 76ms | 3349 samples/s
+    batch 480/5215 | data 4ms | fwd+bwd 68ms | 3351 samples/s
+    batch 500/5215 | data 1ms | fwd+bwd 75ms | 3355 samples/s
+    batch 520/5215 | data 1ms | fwd+bwd 72ms | 3357 samples/s
+    batch 540/5215 | data 0ms | fwd+bwd 74ms | 3359 samples/s
+    batch 560/5215 | data 1ms | fwd+bwd 73ms | 3361 samples/s
+    batch 580/5215 | data 1ms | fwd+bwd 75ms | 3363 samples/s
+    batch 600/5215 | data 0ms | fwd+bwd 76ms | 3364 samples/s
+    batch 620/5215 | data 0ms | fwd+bwd 70ms | 3367 samples/s
+    batch 640/5215 | data 0ms | fwd+bwd 71ms | 3368 samples/s
+    batch 660/5215 | data 1ms | fwd+bwd 72ms | 3370 samples/s
+    batch 680/5215 | data 1ms | fwd+bwd 76ms | 3372 samples/s
+    batch 700/5215 | data 1ms | fwd+bwd 75ms | 3373 samples/s
+    batch 720/5215 | data 0ms | fwd+bwd 71ms | 3375 samples/s
+    batch 740/5215 | data 1ms | fwd+bwd 75ms | 3376 samples/s
+    batch 760/5215 | data 1ms | fwd+bwd 85ms | 3376 samples/s
+    batch 780/5215 | data 1ms | fwd+bwd 72ms | 3372 samples/s
+    batch 800/5215 | data 0ms | fwd+bwd 75ms | 3373 samples/s
+    batch 820/5215 | data 0ms | fwd+bwd 75ms | 3374 samples/s
+    batch 840/5215 | data 0ms | fwd+bwd 72ms | 3375 samples/s
+    batch 860/5215 | data 0ms | fwd+bwd 73ms | 3377 samples/s
+    batch 880/5215 | data 0ms | fwd+bwd 76ms | 3378 samples/s
+    batch 900/5215 | data 0ms | fwd+bwd 78ms | 3379 samples/s
+    batch 920/5215 | data 0ms | fwd+bwd 71ms | 3380 samples/s
+    batch 940/5215 | data 0ms | fwd+bwd 73ms | 3379 samples/s
+    batch 960/5215 | data 0ms | fwd+bwd 73ms | 3379 samples/s
+    batch 980/5215 | data 1ms | fwd+bwd 75ms | 3380 samples/s
+    batch 1000/5215 | data 0ms | fwd+bwd 74ms | 3381 samples/s
+    batch 1020/5215 | data 1ms | fwd+bwd 72ms | 3382 samples/s
+    batch 1040/5215 | data 1ms | fwd+bwd 79ms | 3383 samples/s
+    batch 1060/5215 | data 1ms | fwd+bwd 76ms | 3383 samples/s
+    batch 1080/5215 | data 1ms | fwd+bwd 72ms | 3383 samples/s
+    batch 1100/5215 | data 0ms | fwd+bwd 80ms | 3384 samples/s
+    batch 1120/5215 | data 0ms | fwd+bwd 72ms | 3385 samples/s
+    batch 1140/5215 | data 0ms | fwd+bwd 83ms | 3385 samples/s
+    batch 1160/5215 | data 0ms | fwd+bwd 82ms | 3386 samples/s
+    batch 1180/5215 | data 0ms | fwd+bwd 78ms | 3387 samples/s
+    batch 1200/5215 | data 0ms | fwd+bwd 81ms | 3387 samples/s
+    batch 1220/5215 | data 0ms | fwd+bwd 77ms | 3388 samples/s
+    batch 1240/5215 | data 0ms | fwd+bwd 74ms | 3388 samples/s
+    batch 1260/5215 | data 0ms | fwd+bwd 71ms | 3388 samples/s
+    batch 1280/5215 | data 2ms | fwd+bwd 78ms | 3389 samples/s
+    batch 1300/5215 | data 0ms | fwd+bwd 77ms | 3389 samples/s
+    batch 1320/5215 | data 1ms | fwd+bwd 107ms | 3383 samples/s
+    batch 1340/5215 | data 1ms | fwd+bwd 75ms | 3375 samples/s
+    batch 1360/5215 | data 1ms | fwd+bwd 78ms | 3376 samples/s
+    batch 1380/5215 | data 1ms | fwd+bwd 74ms | 3376 samples/s
+    batch 1400/5215 | data 1ms | fwd+bwd 83ms | 3377 samples/s
+    batch 1420/5215 | data 1ms | fwd+bwd 71ms | 3377 samples/s
+    batch 1440/5215 | data 1ms | fwd+bwd 79ms | 3377 samples/s
+    batch 1460/5215 | data 1ms | fwd+bwd 74ms | 3378 samples/s
+    batch 1480/5215 | data 1ms | fwd+bwd 69ms | 3378 samples/s
+    batch 1500/5215 | data 0ms | fwd+bwd 81ms | 3378 samples/s
+    batch 1520/5215 | data 1ms | fwd+bwd 107ms | 3373 samples/s
+    batch 1540/5215 | data 1ms | fwd+bwd 80ms | 3372 samples/s
+    batch 1560/5215 | data 1ms | fwd+bwd 79ms | 3372 samples/s
+    batch 1580/5215 | data 1ms | fwd+bwd 76ms | 3373 samples/s
+    batch 1600/5215 | data 0ms | fwd+bwd 77ms | 3373 samples/s
+    batch 1620/5215 | data 0ms | fwd+bwd 77ms | 3374 samples/s
+    batch 1640/5215 | data 1ms | fwd+bwd 69ms | 3374 samples/s
+    batch 1660/5215 | data 1ms | fwd+bwd 81ms | 3374 samples/s
+    batch 1680/5215 | data 0ms | fwd+bwd 80ms | 3374 samples/s
+    batch 1700/5215 | data 0ms | fwd+bwd 77ms | 3375 samples/s
+    batch 1720/5215 | data 1ms | fwd+bwd 77ms | 3375 samples/s
+    batch 1740/5215 | data 0ms | fwd+bwd 72ms | 3376 samples/s
+    batch 1760/5215 | data 0ms | fwd+bwd 77ms | 3376 samples/s
+    batch 1780/5215 | data 0ms | fwd+bwd 75ms | 3376 samples/s
+    batch 1800/5215 | data 0ms | fwd+bwd 76ms | 3376 samples/s
+    batch 1820/5215 | data 0ms | fwd+bwd 79ms | 3376 samples/s
+    batch 1840/5215 | data 1ms | fwd+bwd 81ms | 3376 samples/s
+    batch 1860/5215 | data 0ms | fwd+bwd 80ms | 3376 samples/s
+    batch 1880/5215 | data 0ms | fwd+bwd 76ms | 3376 samples/s
+    batch 1900/5215 | data 1ms | fwd+bwd 80ms | 3376 samples/s
+    batch 1920/5215 | data 1ms | fwd+bwd 73ms | 3376 samples/s
+    batch 1940/5215 | data 0ms | fwd+bwd 75ms | 3377 samples/s
+    batch 1960/5215 | data 1ms | fwd+bwd 72ms | 3377 samples/s
+    batch 1980/5215 | data 0ms | fwd+bwd 80ms | 3377 samples/s
+    batch 2000/5215 | data 0ms | fwd+bwd 74ms | 3378 samples/s
+    batch 2020/5215 | data 0ms | fwd+bwd 75ms | 3378 samples/s
+    batch 2040/5215 | data 0ms | fwd+bwd 79ms | 3378 samples/s
+    batch 2060/5215 | data 0ms | fwd+bwd 79ms | 3379 samples/s
+    batch 2080/5215 | data 0ms | fwd+bwd 73ms | 3379 samples/s
+    batch 2100/5215 | data 1ms | fwd+bwd 79ms | 3380 samples/s
+    batch 2120/5215 | data 1ms | fwd+bwd 73ms | 3380 samples/s
+    batch 2140/5215 | data 1ms | fwd+bwd 79ms | 3380 samples/s
+    batch 2160/5215 | data 1ms | fwd+bwd 75ms | 3380 samples/s
+    batch 2180/5215 | data 1ms | fwd+bwd 73ms | 3381 samples/s
+    batch 2200/5215 | data 0ms | fwd+bwd 73ms | 3381 samples/s
+    batch 2220/5215 | data 0ms | fwd+bwd 72ms | 3381 samples/s
+    batch 2240/5215 | data 1ms | fwd+bwd 72ms | 3381 samples/s
+    batch 2260/5215 | data 1ms | fwd+bwd 75ms | 3382 samples/s
+    batch 2280/5215 | data 1ms | fwd+bwd 74ms | 3382 samples/s
+    batch 2300/5215 | data 1ms | fwd+bwd 76ms | 3382 samples/s
+    batch 2320/5215 | data 0ms | fwd+bwd 71ms | 3382 samples/s
+    batch 2340/5215 | data 0ms | fwd+bwd 77ms | 3383 samples/s
+    batch 2360/5215 | data 1ms | fwd+bwd 77ms | 3383 samples/s
+    batch 2380/5215 | data 1ms | fwd+bwd 74ms | 3383 samples/s
+    batch 2400/5215 | data 1ms | fwd+bwd 83ms | 3384 samples/s
+    batch 2420/5215 | data 1ms | fwd+bwd 71ms | 3384 samples/s
+    batch 2440/5215 | data 1ms | fwd+bwd 71ms | 3384 samples/s
+    batch 2460/5215 | data 0ms | fwd+bwd 71ms | 3384 samples/s
+    batch 2480/5215 | data 0ms | fwd+bwd 73ms | 3384 samples/s
+    batch 2500/5215 | data 1ms | fwd+bwd 79ms | 3384 samples/s
+    batch 2520/5215 | data 1ms | fwd+bwd 70ms | 3385 samples/s
+    batch 2540/5215 | data 0ms | fwd+bwd 75ms | 3385 samples/s
+    batch 2560/5215 | data 0ms | fwd+bwd 70ms | 3385 samples/s
+    batch 2580/5215 | data 0ms | fwd+bwd 73ms | 3385 samples/s
+    batch 2600/5215 | data 0ms | fwd+bwd 72ms | 3386 samples/s
+    batch 2620/5215 | data 0ms | fwd+bwd 70ms | 3386 samples/s
+    batch 2640/5215 | data 0ms | fwd+bwd 70ms | 3386 samples/s
+    batch 2660/5215 | data 0ms | fwd+bwd 74ms | 3386 samples/s
+    batch 2680/5215 | data 0ms | fwd+bwd 74ms | 3386 samples/s
+    batch 2700/5215 | data 0ms | fwd+bwd 80ms | 3386 samples/s
+    batch 2720/5215 | data 0ms | fwd+bwd 71ms | 3387 samples/s
+    batch 2740/5215 | data 0ms | fwd+bwd 76ms | 3387 samples/s
+    batch 2760/5215 | data 0ms | fwd+bwd 73ms | 3387 samples/s
+    batch 2780/5215 | data 0ms | fwd+bwd 72ms | 3387 samples/s
+    batch 2800/5215 | data 0ms | fwd+bwd 77ms | 3387 samples/s
+    batch 2820/5215 | data 0ms | fwd+bwd 69ms | 3387 samples/s
+    batch 2840/5215 | data 0ms | fwd+bwd 74ms | 3387 samples/s
+    batch 2860/5215 | data 0ms | fwd+bwd 72ms | 3388 samples/s
+    batch 2880/5215 | data 1ms | fwd+bwd 75ms | 3388 samples/s
+    batch 2900/5215 | data 0ms | fwd+bwd 79ms | 3388 samples/s
+    batch 2920/5215 | data 1ms | fwd+bwd 75ms | 3388 samples/s
+    batch 2940/5215 | data 1ms | fwd+bwd 79ms | 3388 samples/s
+    batch 2960/5215 | data 1ms | fwd+bwd 80ms | 3388 samples/s
+    batch 2980/5215 | data 1ms | fwd+bwd 74ms | 3389 samples/s
+    batch 3000/5215 | data 1ms | fwd+bwd 77ms | 3389 samples/s
+    batch 3020/5215 | data 1ms | fwd+bwd 71ms | 3389 samples/s
+    batch 3040/5215 | data 1ms | fwd+bwd 73ms | 3389 samples/s
+    batch 3060/5215 | data 1ms | fwd+bwd 70ms | 3389 samples/s
+    batch 3080/5215 | data 0ms | fwd+bwd 70ms | 3390 samples/s
+    batch 3100/5215 | data 1ms | fwd+bwd 71ms | 3390 samples/s
+    batch 3120/5215 | data 0ms | fwd+bwd 70ms | 3390 samples/s
+    batch 3140/5215 | data 0ms | fwd+bwd 75ms | 3390 samples/s
+    batch 3160/5215 | data 1ms | fwd+bwd 78ms | 3390 samples/s
+    batch 3180/5215 | data 0ms | fwd+bwd 82ms | 3390 samples/s
+    batch 3200/5215 | data 1ms | fwd+bwd 82ms | 3390 samples/s
+    batch 3220/5215 | data 0ms | fwd+bwd 76ms | 3390 samples/s
+    batch 3240/5215 | data 1ms | fwd+bwd 72ms | 3390 samples/s
+    batch 3260/5215 | data 1ms | fwd+bwd 90ms | 3390 samples/s
+    batch 3280/5215 | data 0ms | fwd+bwd 79ms | 3390 samples/s
+    batch 3300/5215 | data 0ms | fwd+bwd 83ms | 3390 samples/s
+    batch 3320/5215 | data 0ms | fwd+bwd 72ms | 3390 samples/s
+    batch 3340/5215 | data 0ms | fwd+bwd 80ms | 3390 samples/s
+    batch 3360/5215 | data 1ms | fwd+bwd 76ms | 3390 samples/s
+    batch 3380/5215 | data 0ms | fwd+bwd 81ms | 3390 samples/s
+    batch 3400/5215 | data 0ms | fwd+bwd 79ms | 3390 samples/s
+    batch 3420/5215 | data 1ms | fwd+bwd 75ms | 3387 samples/s
+    batch 3440/5215 | data 1ms | fwd+bwd 74ms | 3387 samples/s
+    batch 3460/5215 | data 0ms | fwd+bwd 74ms | 3387 samples/s
+    batch 3480/5215 | data 1ms | fwd+bwd 75ms | 3387 samples/s
+    batch 3500/5215 | data 1ms | fwd+bwd 77ms | 3387 samples/s
+    batch 3520/5215 | data 0ms | fwd+bwd 76ms | 3387 samples/s
+    batch 3540/5215 | data 0ms | fwd+bwd 75ms | 3386 samples/s
+    batch 3560/5215 | data 1ms | fwd+bwd 74ms | 3387 samples/s
+    batch 3580/5215 | data 0ms | fwd+bwd 73ms | 3387 samples/s
+    batch 3600/5215 | data 1ms | fwd+bwd 76ms | 3387 samples/s
+    batch 3620/5215 | data 0ms | fwd+bwd 69ms | 3387 samples/s
+    batch 3640/5215 | data 1ms | fwd+bwd 74ms | 3387 samples/s
+    batch 3660/5215 | data 1ms | fwd+bwd 71ms | 3387 samples/s
+    batch 3680/5215 | data 1ms | fwd+bwd 72ms | 3387 samples/s
+    batch 3700/5215 | data 1ms | fwd+bwd 77ms | 3387 samples/s
+    batch 3720/5215 | data 0ms | fwd+bwd 71ms | 3386 samples/s
+    batch 3740/5215 | data 1ms | fwd+bwd 74ms | 3387 samples/s
+    batch 3760/5215 | data 1ms | fwd+bwd 75ms | 3387 samples/s
+    batch 3780/5215 | data 1ms | fwd+bwd 75ms | 3387 samples/s
+    batch 3800/5215 | data 0ms | fwd+bwd 80ms | 3387 samples/s
+    batch 3820/5215 | data 1ms | fwd+bwd 81ms | 3387 samples/s
+    batch 3840/5215 | data 1ms | fwd+bwd 76ms | 3387 samples/s
+    batch 3860/5215 | data 0ms | fwd+bwd 78ms | 3387 samples/s
+    batch 3880/5215 | data 0ms | fwd+bwd 74ms | 3386 samples/s
+    batch 3900/5215 | data 0ms | fwd+bwd 75ms | 3386 samples/s
+    batch 3920/5215 | data 0ms | fwd+bwd 72ms | 3385 samples/s
+    batch 3940/5215 | data 1ms | fwd+bwd 75ms | 3385 samples/s
+    batch 3960/5215 | data 1ms | fwd+bwd 75ms | 3385 samples/s
+    batch 3980/5215 | data 0ms | fwd+bwd 78ms | 3385 samples/s
+    batch 4000/5215 | data 0ms | fwd+bwd 77ms | 3385 samples/s
+    batch 4020/5215 | data 1ms | fwd+bwd 80ms | 3385 samples/s
+    batch 4040/5215 | data 1ms | fwd+bwd 74ms | 3385 samples/s
+    batch 4060/5215 | data 1ms | fwd+bwd 81ms | 3385 samples/s
+    batch 4080/5215 | data 0ms | fwd+bwd 72ms | 3386 samples/s
+    batch 4100/5215 | data 1ms | fwd+bwd 73ms | 3386 samples/s
+    batch 4120/5215 | data 0ms | fwd+bwd 74ms | 3386 samples/s
+    batch 4140/5215 | data 0ms | fwd+bwd 71ms | 3386 samples/s
+    batch 4160/5215 | data 1ms | fwd+bwd 73ms | 3386 samples/s
+    batch 4180/5215 | data 1ms | fwd+bwd 72ms | 3387 samples/s
+    batch 4200/5215 | data 1ms | fwd+bwd 72ms | 3387 samples/s
+    batch 4220/5215 | data 1ms | fwd+bwd 88ms | 3385 samples/s
+    batch 4240/5215 | data 1ms | fwd+bwd 71ms | 3381 samples/s
+    batch 4260/5215 | data 0ms | fwd+bwd 74ms | 3381 samples/s
+    batch 4280/5215 | data 0ms | fwd+bwd 72ms | 3382 samples/s
+    batch 4300/5215 | data 1ms | fwd+bwd 77ms | 3382 samples/s
+    batch 4320/5215 | data 1ms | fwd+bwd 70ms | 3382 samples/s
+    batch 4340/5215 | data 1ms | fwd+bwd 74ms | 3381 samples/s
+    batch 4360/5215 | data 0ms | fwd+bwd 76ms | 3382 samples/s
+    batch 4380/5215 | data 1ms | fwd+bwd 71ms | 3382 samples/s
+    batch 4400/5215 | data 0ms | fwd+bwd 80ms | 3382 samples/s
+    batch 4420/5215 | data 0ms | fwd+bwd 72ms | 3381 samples/s
+    batch 4440/5215 | data 1ms | fwd+bwd 76ms | 3381 samples/s
+    batch 4460/5215 | data 0ms | fwd+bwd 76ms | 3381 samples/s
+    batch 4480/5215 | data 0ms | fwd+bwd 74ms | 3381 samples/s
+    batch 4500/5215 | data 1ms | fwd+bwd 76ms | 3381 samples/s
+    batch 4520/5215 | data 0ms | fwd+bwd 82ms | 3381 samples/s
+    batch 4540/5215 | data 1ms | fwd+bwd 73ms | 3382 samples/s
+    batch 4560/5215 | data 0ms | fwd+bwd 77ms | 3382 samples/s
+    batch 4580/5215 | data 1ms | fwd+bwd 72ms | 3382 samples/s
+    batch 4600/5215 | data 1ms | fwd+bwd 76ms | 3382 samples/s
+    batch 4620/5215 | data 2ms | fwd+bwd 87ms | 3380 samples/s
+    batch 4640/5215 | data 0ms | fwd+bwd 72ms | 3381 samples/s
+    batch 4660/5215 | data 1ms | fwd+bwd 72ms | 3381 samples/s
+    batch 4680/5215 | data 1ms | fwd+bwd 70ms | 3381 samples/s
+    batch 4700/5215 | data 1ms | fwd+bwd 74ms | 3381 samples/s
+    batch 4720/5215 | data 0ms | fwd+bwd 115ms | 3379 samples/s
+    batch 4740/5215 | data 1ms | fwd+bwd 69ms | 3376 samples/s
+    batch 4760/5215 | data 0ms | fwd+bwd 75ms | 3376 samples/s
+    batch 4780/5215 | data 1ms | fwd+bwd 73ms | 3376 samples/s
+    batch 4800/5215 | data 1ms | fwd+bwd 78ms | 3377 samples/s
+    batch 4820/5215 | data 1ms | fwd+bwd 10ms | 3376 samples/s
+    batch 4840/5215 | data 220ms | fwd+bwd 10ms | 3372 samples/s
+    batch 4860/5215 | data 1ms | fwd+bwd 12ms | 3370 samples/s
+    batch 4880/5215 | data 1ms | fwd+bwd 10ms | 3368 samples/s
+    batch 4900/5215 | data 203ms | fwd+bwd 11ms | 3365 samples/s
+    batch 4920/5215 | data 1ms | fwd+bwd 10ms | 3365 samples/s
+    batch 4940/5215 | data 1ms | fwd+bwd 10ms | 3364 samples/s
+    batch 4960/5215 | data 200ms | fwd+bwd 10ms | 3363 samples/s
+    batch 4980/5215 | data 21ms | fwd+bwd 11ms | 3363 samples/s
+    batch 5000/5215 | data 0ms | fwd+bwd 9ms | 3363 samples/s
+    batch 5020/5215 | data 51ms | fwd+bwd 12ms | 3362 samples/s
+    batch 5040/5215 | data 111ms | fwd+bwd 11ms | 3359 samples/s
+    batch 5060/5215 | data 1ms | fwd+bwd 71ms | 3358 samples/s
+    batch 5080/5215 | data 1ms | fwd+bwd 58ms | 3357 samples/s
+    batch 5100/5215 | data 1ms | fwd+bwd 76ms | 3355 samples/s
+    batch 5120/5215 | data 1ms | fwd+bwd 95ms | 3354 samples/s
+    batch 5140/5215 | data 1ms | fwd+bwd 70ms | 3353 samples/s
+    batch 5160/5215 | data 0ms | fwd+bwd 66ms | 3349 samples/s
+    batch 5180/5215 | data 1ms | fwd+bwd 65ms | 3343 samples/s
+    batch 5200/5215 | data 1ms | fwd+bwd 70ms | 3338 samples/s
+卡住太久手动停止
+root@star:~/zhaokj/CVLface_lmdb/cvlface/research/recognition/code/work_0605# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 fabric run         --strategy=ddp --devices=7 --precision="bf16-mixed"         benchmark_dataformat.py --data_root /data1/dataset_0605/try3 --benchmark_root /data1/dataset_0605/benchmark3 > log3_multi
+Initializing distributed: GLOBAL_RANK: 6, MEMBER: 7/7
+Initializing distributed: GLOBAL_RANK: 4, MEMBER: 5/7
+Initializing distributed: GLOBAL_RANK: 2, MEMBER: 3/7
+Initializing distributed: GLOBAL_RANK: 1, MEMBER: 2/7
+Initializing distributed: GLOBAL_RANK: 3, MEMBER: 4/7
+Using bfloat16 Automatic Mixed Precision (AMP)
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Initializing distributed: GLOBAL_RANK: 0, MEMBER: 1/7
+Initializing distributed: GLOBAL_RANK: 5, MEMBER: 6/7
+----------------------------------------------------------------------------------------------------
+distributed_backend=nccl
+All distributed processes registered. Starting with 7 processes
+----------------------------------------------------------------------------------------------------
+
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/albumentations/check_version.py:147: UserWarning: Error fetching version info <urlopen error _ssl.c:993: The handshake operation timed out>
+  data = fetch_version_info()
+^CW0608 07:09:18.859000 3709730 site-packages/torch/distributed/elastic/agent/server/api.py:723] Received 2 death signal, shutting down workers
+W0608 07:09:18.863000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709827 closing signal SIGINT
+W0608 07:09:18.864000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709828 closing signal SIGINT
+W0608 07:09:18.865000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709829 closing signal SIGINT
+W0608 07:09:18.866000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709830 closing signal SIGINT
+W0608 07:09:18.867000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709831 closing signal SIGINT
+W0608 07:09:18.867000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709832 closing signal SIGINT
+W0608 07:09:18.868000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709833 closing signal SIGINT
+^CW0608 07:09:24.356000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709827 closing signal SIGTERM
+W0608 07:09:24.357000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709828 closing signal SIGTERM
+W0608 07:09:24.358000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709829 closing signal SIGTERM
+W0608 07:09:24.359000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709830 closing signal SIGTERM
+W0608 07:09:24.360000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709831 closing signal SIGTERM
+W0608 07:09:24.361000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709832 closing signal SIGTERM
+W0608 07:09:24.362000 3709730 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 3709833 closing signal SIGTERM
+^CTraceback (most recent call last):
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 715, in run
+    result = self._invoke_run(role)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 879, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 84, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3709730 got signal: 2
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 724, in run
+    self._shutdown(e.sigval)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/local_elastic_agent.py", line 368, in _shutdown
+    self._pcontext.close(death_sig)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 577, in close
+    self._close(death_sig=death_sig, timeout=timeout)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 912, in _close
+    handler.proc.wait(time_to_wait)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/subprocess.py", line 1264, in wait
+    return self._wait(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/subprocess.py", line 2047, in _wait
+    time.sleep(delay)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 84, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3709730 got signal: 2
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/miniconda3/envs/cvlface/bin/fabric", line 6, in <module>
+    sys.exit(_main())
+             ^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/click/core.py", line 1514, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/click/core.py", line 1435, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/click/core.py", line 1902, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/click/core.py", line 1298, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/click/core.py", line 853, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/lightning/fabric/cli.py", line 137, in _run
+    main(args=Namespace(**kwargs), script_args=script_args)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/lightning/fabric/cli.py", line 234, in main
+    _torchrun_launch(args, script_args or [])
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/lightning/fabric/cli.py", line 229, in _torchrun_launch
+    torchrun.main(torchrun_args)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 268, in launch_agent
+    result = agent.run()
+             ^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/metrics/api.py", line 138, in wrapper
+    result = f(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 729, in run
+    self._shutdown()
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/local_elastic_agent.py", line 368, in _shutdown
+    self._pcontext.close(death_sig)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 577, in close
+    self._close(death_sig=death_sig, timeout=timeout)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 912, in _close
+    handler.proc.wait(time_to_wait)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/subprocess.py", line 1264, in wait
+    return self._wait(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/subprocess.py", line 2047, in _wait
+    time.sleep(delay)
+  File "/root/miniconda3/envs/cvlface/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 84, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3709730 got signal:

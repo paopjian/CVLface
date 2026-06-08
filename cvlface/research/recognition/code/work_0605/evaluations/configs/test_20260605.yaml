@@ -1,0 +1,46 @@
+data_root: '/data1/dataset_0605/'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "work_0605_3t": {
+    'path': 'test_3t',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+  "work_0605_enhance": {
+    'path': 'test_enhance',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+  "work_0605_glint": {
+    'path': 'test_glint',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+  "work_1201": {
+    'path': 'test_1201',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 512,
+    'num_workers': 5
+  },
+   "IJBC_gt_aligned": {
+    'path': 'facerec_val/IJBC_gt_aligned',
+    'evaluation_type': 'ijbbc',
+    'color_space': 'RGB',
+    'batch_size': 512,
+    'num_workers': 5
+  },
+
+}
+
+combined_evaluations: {
+  "work_0605": {
+    "sources": ["work_0605_3t", "work_0605_enhance", "work_0605_glint"],
+  }
+}
