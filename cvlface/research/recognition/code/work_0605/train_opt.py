@@ -274,7 +274,7 @@ if __name__ == '__main__':
     model, classifier = apply_peft(cfg.pefts, model=model, classifier=classifier, data_cfg=cfg.dataset, label_mapping=label_mapping)
     # channels_last 加速卷积
     model = model.to(memory_format=torch.channels_last)
-    # torch.compile 编译加速
+    # torch.compile 编译加速 (在DDP包装前compile, PyTorch 2.12推荐)
     model = torch.compile(model, dynamic=False)
 
     # get optimizer
