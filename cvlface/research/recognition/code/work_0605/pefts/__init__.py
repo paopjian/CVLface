@@ -14,7 +14,7 @@ def apply_peft(peft_config, model, classifier, data_cfg, label_mapping=None):
         model.load_state_dict_from_path(os.path.join(peft_config.model_ckpt_dir, 'model.pt'))
     if peft_config.classifier_ckpt_dir and classifier is not None:
         print('load classifier from', peft_config.classifier_ckpt_dir)
-        classifier.load_state_dict_from_path(os.path.join(peft_config.classifier_ckpt_dir, 'classifier.pt'))
+        classifier.load_state_dict_from_path(peft_config.classifier_ckpt_dir)
 
     peft_model = apply_peft_to_model(peft_config, model)
     classifier = load_center(classifier, peft_config, data_cfg, label_mapping)
