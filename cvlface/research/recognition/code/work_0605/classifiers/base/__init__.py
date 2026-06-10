@@ -48,48 +48,38 @@ class BaseClassifier(torch.nn.Module):
 
 
     def load_state_dict_from_path(self, pretrained_model_path):
+        save_dir = pretrained_model_path
+        all_partitions = [name for name in os.listdir(save_dir) if 'classifier_rank' in name and name.endswith('.pt')]
+        all_partitions = natural_sort(all_partitions)
+        ckpt_worldsize = len(all_partitions)
 
-        # save_dir = os.path.dirname(pretrained_model_path)
-        # save_name = os.path.basename(pretrained_model_path)
-        # rank_added_name = os.path.splitext(save_name)[0] + f'_rank{self.rank}' + os.path.splitext(save_name)[1]
-        # pretrained_model_path = os.path.join(save_dir, rank_added_name)
-
-        # all_partitions = [name for name in os.listdir(save_dir) if '_rank' in name and '.pt' in name]
-        # all_partitions = natural_sort(all_partitions)
-        # ckpt_worldsize = len(all_partitions)
-
-        # if self.world_size != ckpt_worldsize:
-        #     # we need to redistribute the partialfc weights
-        #     part_ckpts = [torch.load(os.path.join(save_dir, name), map_location='cpu') for name in all_partitions]
-        #     total_ckpt_num_subjects = sum([ckpt['partial_fc.weight'].shape[0] for ckpt in part_ckpts])
-        #     assert total_ckpt_num_subjects - self.partial_fc.num_classes < 10, \
-        #         (f"total_ckpt_num_subjects: {total_ckpt_num_subjects}, "
-        #          f"self.partial_fc.num_classes: {self.partial_fc.num_classes}"
-        #          f"The number can be slightly different due to the last partition.")
-
-        #     combined_weight = torch.cat([ckpt['partial_fc.weight'] for ckpt in part_ckpts], dim=0)
-        #     state_dict = part_ckpts[0]
-
-        #     class_start = self.partial_fc.class_start
-        #     num_sample = self.partial_fc.num_local
-        #     sub_center = combined_weight[class_start:class_start + num_sample, :]
-        #     if sub_center.shape[0] != num_sample:
-        #         # append zero
-        #         extra_center = torch.zeros(num_sample - sub_center.shape[0], sub_center.shape[1],
-        #                                    device=self.device, dtype=self.dtype)
-        #         sub_center = torch.cat([sub_center, extra_center], dim=0)
-        #     state_dict['partial_fc.weight'] = sub_center
-
-        # else:
-        #     state_dict = load_state_dict_from_path(pretrained_model_path)
-        try:
-            save_name = os.path.join(pretrained_model_path, f'classifier_rank{self.rank}.pt')
-            pretrained_model_path = save_name
-            state_dict = load_state_dict_from_path(pretrained_model_path)
-            
+        if self.world_size == ckpt_worldsize:
+            rank_file = os.path.join(save_dir, f'classifier_rank{self.rank}.pt')
+            state_dict = load_state_dict_from_path(rank_file)
             result = self.load_state_dict(state_dict, strict=False)
-            print(f'加载预训练模型 {self.rank}:', pretrained_model_path)
+            print(f'加载预训练模型 rank{self.rank} (same world_size={ckpt_worldsize}):', rank_file)
             print(result)
-        except Exception as e:
-            print(f"Failed to load state_dict from {pretrained_model_path}: {e}")
-            raise e
+        else:
+            print(f'Redistributing classifier: ckpt_worldsize={ckpt_worldsize} -> current_worldsize={self.world_size}')
+            part_ckpts = [torch.load(os.path.join(save_dir, name), map_location='cpu') for name in all_partitions]
+            combined_weight = torch.cat([ckpt['partial_fc.weight'] for ckpt in part_ckpts], dim=0)
+            total_ckpt_num_subjects = combined_weight.shape[0]
+            print(f'Combined classifier weight: {total_ckpt_num_subjects} classes from {ckpt_worldsize} ranks')
+
+            state_dict = part_ckpts[0]
+            class_start = self.partial_fc.class_start
+            num_sample = self.partial_fc.num_local
+            sub_center = combined_weight[class_start:class_start + num_sample, :]
+            if sub_center.shape[0] < num_sample:
+                extra = torch.zeros(num_sample - sub_center.shape[0], sub_center.shape[1])
+                sub_center = torch.cat([sub_center, extra], dim=0)
+            state_dict['partial_fc.weight'] = sub_center
+
+            if 'partial_fc.batch_mean' in part_ckpts[0]:
+                state_dict['partial_fc.batch_mean'] = part_ckpts[0]['partial_fc.batch_mean']
+            if 'partial_fc.batch_std' in part_ckpts[0]:
+                state_dict['partial_fc.batch_std'] = part_ckpts[0]['partial_fc.batch_std']
+
+            result = self.load_state_dict(state_dict, strict=False)
+            print(f'加载预训练模型 rank{self.rank} (redistributed {ckpt_worldsize}->{self.world_size}):', save_dir)
+            print(result)

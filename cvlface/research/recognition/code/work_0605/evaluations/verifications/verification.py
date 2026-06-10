@@ -199,8 +199,15 @@ def calculate_val(thresholds,
             _, far_train[threshold_idx] = calculate_val_far(
                 threshold, dist[train_set], actual_issame[train_set])
         if np.max(far_train) >= far_target:
-            f = interpolate.interp1d(far_train, thresholds, kind='slinear')
-            threshold = f(far_target)
+            # Remove duplicate x-values for scipy >= 1.12 compatibility
+            unique_mask = np.concatenate(([True], np.diff(far_train) != 0))
+            far_unique = far_train[unique_mask]
+            thresh_unique = thresholds[unique_mask]
+            if len(far_unique) >= 2:
+                f = interpolate.interp1d(far_unique, thresh_unique, kind='slinear')
+                threshold = f(far_target)
+            else:
+                threshold = 0.0
         else:
             threshold = 0.0
 
