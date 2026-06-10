@@ -23,10 +23,17 @@ def get_train_dataset(dataset_cfg, train_transform, aug_cfg, local_rank=0):
     root_dir = os.path.join(dataset_cfg.data_root, dataset_cfg.rec)
     rec = os.path.join(root_dir, 'train.rec')
     idx = os.path.join(root_dir, 'train.idx')
+    lmdb_path = os.path.join(root_dir, 'train.lmdb')
 
     # Synthetic
     if dataset_cfg.rec == "synthetic":
         train_set = SyntheticDataset(dataset_cfg.num_classes, dataset_cfg.num_image)
+        label_mapping = None
+
+    # LMDB format
+    elif os.path.isdir(lmdb_path):
+        from .benchmark_datasets import LMDBFaceDataset
+        train_set = LMDBFaceDataset(root_dir, transform=train_transform)
         label_mapping = None
 
     # Mxnet RecordIO

@@ -801,7 +801,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 #     save_images(sub_results, os.path.join(save_path, f'{thread_far[th]}'))
         
         if self.type == '4':
-            # 使用 v3 直方图方式计算
+            # 使用 v4 直方图方式计算
             from .cluster_utils import get_sim_matrix_large_scale_v4
 
             query_ids = collection['labels'].numpy()

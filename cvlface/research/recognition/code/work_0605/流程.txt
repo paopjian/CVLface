@@ -6,7 +6,8 @@
 # 硬件: 7x RTX4090
 #
 # 流程:
-#   阶段1: 分类器训练 (backbone冻结)
+#   阶
+段1: 分类器训练 (backbone冻结)
 #   阶段2: body.36解冻训练, 分类器冻结
 #   阶段3: 分类器训练 (backbone冻结, 从阶段2 checkpoint继续)
 #   阶段4: 模型全解冻, 分类器冻结
@@ -35,18 +36,30 @@ dataset.model_save_dir=/data1/dataset_0605/train_output"
 # 目的: 在冻结backbone上训练分类器, 让FC权重适应新数据分布
 ################################################################################
 
-conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mixed" \
+conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
     train5.py \
     trainers.prefix=ft_ir101_s1_cls_warmup_0605 \
     $COMMON \
     models.freeze=True \
-    pefts=configs/freeze.yaml \
+    pefts=configs/freeze.yaml trainers.batch_size=512\
     optims=configs/step_sgd.yaml \
     optims.lr=0.008 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
     optims.momentum=0.9 optims.weight_decay=0.0001 \
     optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
     trainers.skip_final_eval=True
 
+conda activate cvlface 
+fabric run --devices=7 --precision="bf16-mixed" \
+    train_opt.py \
+    trainers.prefix=ft_ir101_s1_cls_warmup_0605 \
+    $COMMON \
+    models.freeze=True \
+    pefts=configs/freeze.yaml trainers.batch_size=512\
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=True
 
 ################################################################################
 # 阶段2: body.36解冻训练, 分类器冻结
@@ -56,12 +69,12 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
 ################################################################################
 
 # >>> 根据阶段1输出修改 STAGE1_CKPT 路径 <<<
-STAGE1_CKPT="/data1/dataset_0605/train_output/ft_ir101_s1_cls_warmup_0605_06-08_0/checkpoints_every_epoch/epoch:4_step:XXXXX"
+STAGE1_CKPT="/data1/dataset_0605/train_output/ft_ir101_s1_cls_warmup_0605_06-08_2/checkpoints_every_epoch/epoch:4_step:51735"
 
-conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mixed" \
+conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
     train5.py \
     trainers.prefix=ft_ir101_s2_body36_0605 \
-    trainers.num_gpu=7 trainers.batch_size=256 trainers.num_workers=8 \
+    trainers.num_gpu=7 trainers.batch_size=512 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
     models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
@@ -72,10 +85,11 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
     losses=configs/adaface.yaml \
     pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
     pefts.classifier_ckpt_dir=${STAGE1_CKPT} \
-    optims=configs/step_sgd.yaml \
-    optims.lr=0.004 optims.num_epoch=8 "optims.lr_milestones=[4,6]" \
-    optims.momentum=0.9 optims.weight_decay=0.0001 \
-    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    optims.lr=0.008 optims.num_epoch=15 \
+    optims.warmup_epoch=2 \
+    optims.momentum=0.9 optims.weight_decay=0.0005 \
+    optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+    optims.scheduler='cosine \
     trainers.skip_final_eval=True \
     evaluations=configs/val_20260605.yaml \
     dataset.model_save_dir=/data1/dataset_0605/train_output

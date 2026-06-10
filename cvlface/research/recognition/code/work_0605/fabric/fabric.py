@@ -28,14 +28,16 @@ def setup_dataloader_from_dataset(dataset,
                                      rank=fabric.local_rank, shuffle=True, drop_last=True, seed=seed)
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, sampler=sampler,
                                 collate_fn=collate_fn, worker_init_fn=init_fn,
-                                drop_last=True, shuffle=(sampler is None), pin_memory=True)
+                                drop_last=True, shuffle=(sampler is None), pin_memory=True,
+                                prefetch_factor=3 if num_workers > 0 else None)
 
     else:
         sampler = DistributedSampler(dataset=dataset, num_replicas=fabric.world_size,
                                      rank=fabric.local_rank, shuffle=False, drop_last=False, seed=seed)
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, sampler=sampler,
                                 collate_fn=collate_fn, worker_init_fn=init_fn,
-                                drop_last=False, shuffle=(sampler is None), pin_memory=True)
+                                drop_last=False, shuffle=(sampler is None), pin_memory=True,
+                                prefetch_factor=3 if num_workers > 0 else None)
     dataloader = fabric.setup_dataloaders(dataloader, use_distributed_sampler=False)
     return dataloader
 
