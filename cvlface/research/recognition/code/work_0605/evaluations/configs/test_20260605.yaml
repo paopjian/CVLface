@@ -38,9 +38,3 @@ per_epoch_evaluations: {
   },
 
 }
-
-combined_evaluations: {
-  "work_0605": {
-    "sources": ["work_0605_3t", "work_0605_enhance", "work_0605_glint"],
-  }
-}

@@ -35,6 +35,8 @@ from evaluations import run_combined_evaluations
 import time
 import mlflow
 from lightning.fabric import Fabric
+from lightning.fabric.strategies import DDPStrategy
+import datetime
 from pefts import apply_peft
 from general_utils.dist_utils import verify_ddp_weights_equal
 from functools import partial
@@ -195,10 +197,11 @@ if __name__ == '__main__':
         loggers.append(wandb_logger)
 
     # grad_max_norm?
+    ddp_strategy = DDPStrategy(timeout=datetime.timedelta(minutes=120))
     fabric = Fabric(precision=cfg.trainers.precision,
                     loggers=loggers,
                     accelerator="auto",
-                    strategy="ddp",
+                    strategy=ddp_strategy,
                     devices=cfg.trainers.num_gpu)
     
     
@@ -454,8 +457,8 @@ if __name__ == '__main__':
         avg_epoch_loss = np.mean(epoch_losses) if epoch_losses else float('inf')
 
 
-        # validation
-        if cfg.evaluations.eval_every_n_epochs > 0:
+        # validation (skip when only classifier is training — model embeddings unchanged)
+        if cfg.evaluations.eval_every_n_epochs > 0 and model.has_trainable_params():
             print('Evaluation Started')
             eval_start_time = time.time()
             all_result = {}
