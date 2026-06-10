@@ -1,30 +1,37 @@
 ################################################################################
 # dataset_0605 多阶段训练流程
 # 模型: iResNet-101 (AdaFace/WebFace12M pretrained)
-# 数据: /data1/dataset_0605/train (791509类, 37M图片, ImageFolder+Parquet缓存)
+# 数据: /data1/dataset_0605/train_rec (RecordIO格式, 791509类, 37M图片)
 # 输出: /data1/dataset_0605/train_output/
 # 硬件: 7x RTX4090
 #
 # 流程:
-#   阶
-段1: 分类器训练 (backbone冻结)
+#   阶段1: 分类器训练 (backbone冻结)
 #   阶段2: body.36解冻训练, 分类器冻结
 #   阶段3: 分类器训练 (backbone冻结, 从阶段2 checkpoint继续)
 #   阶段4: 模型全解冻, 分类器冻结
+#
+# 性能优化 (已应用):
+#   - 数据格式: RecordIO (比ImageFolder快33%, 比LMDB磁盘占用少)
+#   - 解码后端: TurboJPEG (比PIL快10%, DECODE_BACKEND=turbojpeg)
+#   - Augmenter: v2 numpy版 (比PIL版快5%, 零PIL依赖)
+#   - DataLoader: persistent_workers + prefetch_factor=3
+#   - GPU: torch.compile + channels_last + cudnn.benchmark (+31%)
 #
 # 注意: fabric run 需要 LD_LIBRARY_PATH 修复 scipy/libstdc++ 兼容问题
 ################################################################################
 
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6
 export LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH
+export DECODE_BACKEND=turbojpeg
 
 # 公共参数
 COMMON="trainers.num_gpu=7 trainers.batch_size=256 trainers.num_workers=8 \
 trainers.precision=bf16-mixed \
 models=iresnet/configs/v1_ir101.yaml \
 models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
-dataset=configs/dataset_0605_train.yaml \
-data_augs=configs/basic_v1.yaml \
+dataset=configs/dataset_0605_train_rec.yaml \
+data_augs=configs/basic_v2_numpy.yaml \
 classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
 losses=configs/adaface.yaml \
 evaluations=configs/val_20260605.yaml \
@@ -79,8 +86,8 @@ conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
     models=iresnet/configs/v1_ir101.yaml \
     models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
     models.freeze=False \
-    dataset=configs/dataset_0605_train.yaml \
-    data_augs=configs/basic_v1.yaml \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    data_augs=configs/gridsample_v2_numpy.yaml \
     classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
     losses=configs/adaface.yaml \
     pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
@@ -112,8 +119,8 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
     models=iresnet/configs/v1_ir101.yaml \
     models.start_from=${STAGE2_CKPT}/model.pt \
     models.freeze=True \
-    dataset=configs/dataset_0605_train.yaml \
-    data_augs=configs/basic_v1.yaml \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    data_augs=configs/basic_v2_numpy.yaml \
     classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
     losses=configs/adaface.yaml \
     pefts=configs/freeze.yaml \
@@ -144,8 +151,8 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
     models=iresnet/configs/v1_ir101.yaml \
     models.start_from=${STAGE3_CKPT}/model.pt \
     models.freeze=False \
-    dataset=configs/dataset_0605_train.yaml \
-    data_augs=configs/basic_v1.yaml \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    data_augs=configs/basic_v2_numpy.yaml \
     classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
     losses=configs/adaface.yaml \
     pefts=configs/full.yaml \

@@ -29,7 +29,8 @@ def setup_dataloader_from_dataset(dataset,
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, sampler=sampler,
                                 collate_fn=collate_fn, worker_init_fn=init_fn,
                                 drop_last=True, shuffle=(sampler is None), pin_memory=True,
-                                prefetch_factor=3 if num_workers > 0 else None)
+                                prefetch_factor=3 if num_workers > 0 else None,
+                                persistent_workers=num_workers > 0)
 
     else:
         sampler = DistributedSampler(dataset=dataset, num_replicas=fabric.world_size,

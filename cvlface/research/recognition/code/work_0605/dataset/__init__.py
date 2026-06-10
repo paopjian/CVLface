@@ -9,6 +9,7 @@ import random
 
 from .base_dataset import SyntheticDataset, MXFaceDataset
 from .augment_dataset import AugmentMXDataset
+from .augment_dataset_v2 import AugmentMXDatasetV2
 from .repeated_dataset import RepeatedSamplingMXDataset
 from .repeated_dataset_with_ldmk_theta import RepeatedWithLdmkThetaMXDataset
 from .subset_dataset import SubsetDataset
@@ -57,9 +58,14 @@ def get_train_dataset(dataset_cfg, train_transform, aug_cfg, local_rank=0):
                                                           repeated_sampling_cfg=dataset_cfg.repeated_sampling_cfg)
             else:
                 # augmentation
-                train_set = AugmentMXDataset(root_dir=root_dir, local_rank=local_rank,
-                                             augmentation_version=aug_cfg.augmentation_version,
-                                             aug_params=aug_cfg.aug_params)
+                if 'v2' in aug_cfg.augmentation_version:
+                    train_set = AugmentMXDatasetV2(root_dir=root_dir, local_rank=local_rank,
+                                                   augmentation_version=aug_cfg.augmentation_version,
+                                                   aug_params=aug_cfg.aug_params)
+                else:
+                    train_set = AugmentMXDataset(root_dir=root_dir, local_rank=local_rank,
+                                                 augmentation_version=aug_cfg.augmentation_version,
+                                                 aug_params=aug_cfg.aug_params)
 
         train_set.transform = train_transform
 
