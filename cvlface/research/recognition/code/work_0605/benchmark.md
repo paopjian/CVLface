@@ -103,6 +103,7 @@ RecordIO 和 LMDB 训练速度几乎一样 (差 1.5%)。RecordIO 更优: 打包�
 | 解码后端 | Epoch Time | Avg Speed | 相对 PIL |
 |----------|-----------|-----------|----------|
 | PIL (默认) | 3.23 min | 22,637 imgs/s | 1.00x |
+| OpenCV (cv2) | 3.10 min | 23,100 imgs/s | 1.04x |
 | torchvision.io | 3.16 min | 22,475 imgs/s | 0.99x |
 | **TurboJPEG** | **2.90 min** | **24,522 imgs/s** | **1.08x** |
 | TurboJPEG + 内存盘 | 3.22 min | 22,063 imgs/s | 0.97x |
@@ -176,7 +177,7 @@ TurboJPEG 赢在: 纯 C 库 + 无内部线程 + 直接返回 numpy (零 torch di
 |------|-----|--------|-----------|----------------|
 | 单线程速度 | 3,715/s | 6,650/s | 6,464/s | 6,679/s |
 | DataLoader w=8 | 9,479/s | 10,288/s | 11,742/s | 11,631/s |
-| 实际训练 (7卡) | 3.23 min | 未测 | **2.90 min** | 3.16 min |
+| 实际训练 (7卡) | 3.23 min | 3.10 min | **2.90 min** | 3.16 min |
 | 额外依赖 | 无 | opencv-python | PyTurboJPEG + libturbojpeg | torchvision ≥0.15 |
 | fork-safe | 是 | 是 | 是 (无状态) | 有开销 |
 | 多 worker 表现 | 基准 | 好 | **最好** | 退化 |
