@@ -72,8 +72,7 @@ class MXFaceDataset(Dataset):
         if not isinstance(label, numbers.Number):
             label = label[0]
         label = torch.tensor(label, dtype=torch.long)
-        sample = RecordIOReader.decode_image(img)
-        sample = self.to_PIL(sample)
+        sample = RecordIOReader.decode_image(img)  # returns PIL Image
         return sample, label
 
 
