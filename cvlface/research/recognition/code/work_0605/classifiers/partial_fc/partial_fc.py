@@ -106,12 +106,12 @@ class PartialFC_V2(torch.nn.Module):
                 pass
         """
         with torch.no_grad():
-            positive = torch.unique(labels[index_positive], sorted=True).cuda()
+            positive = torch.unique(labels[index_positive], sorted=True)
             if self.num_sample - positive.size(0) >= 0:
-                perm = torch.rand(size=[self.num_local]).cuda()
+                perm = torch.rand(size=[self.num_local], device=labels.device)
                 perm[positive] = 2.0
-                index = torch.topk(perm, k=self.num_sample)[1].cuda()
-                index = index.sort()[0].cuda()
+                index = torch.topk(perm, k=self.num_sample)[1]
+                index = index.sort()[0]
             else:
                 index = positive
             self.weight_index = index
@@ -152,7 +152,7 @@ class PartialFC_V2(torch.nn.Module):
             for _ in range(self.world_size)
         ]
         _gather_labels = [
-            torch.zeros(batch_size).long().cuda() for _ in range(self.world_size)
+            torch.zeros(batch_size, dtype=torch.long, device=local_labels.device) for _ in range(self.world_size)
         ]
         _list_embeddings = AllGather(local_embeddings, *_gather_embeddings)
         distributed.all_gather(_gather_labels, local_labels)
@@ -174,12 +174,10 @@ class PartialFC_V2(torch.nn.Module):
 
         # with torch.cuda.amp.autocast(self.fp16):
         norms = embeddings.norm(p=2, dim=1, keepdim=True).clamp_min(1e-8)
-        norm_embeddings = embeddings / norms
+        norm_embeddings = normalize(embeddings, dim=1)
 
         norm_weight_activated = normalize(weight)
         logits = linear(norm_embeddings, norm_weight_activated)
-
-        logits = logits.clamp(-1, 1)
 
         if isinstance(self.margin_softmax, CombinedMarginLoss):
             logits = self.margin_softmax(logits=logits, labels=labels)
@@ -245,7 +243,7 @@ class DistCrossEntropyFunc(torch.autograd.Function):
         one_hot.scatter_(1, label[index], 1)
         logits[index] -= one_hot
         logits.div_(batch_size)
-        return logits * loss_gradient.item(), None
+        return logits * loss_gradient, None
 
 
 class DistCrossEntropy(torch.nn.Module):

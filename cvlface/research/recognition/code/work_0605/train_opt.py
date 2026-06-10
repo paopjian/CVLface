@@ -41,28 +41,47 @@ from pefts import apply_peft
 from general_utils.dist_utils import verify_ddp_weights_equal
 from functools import partial
 from fabric.fabric import setup_dataloader_from_dataset
+import threading, queue
+
+# MLflow 异步写入线程 (避免 SQLite I/O 阻塞训练循环)
+_mlflow_queue = queue.Queue()
+
+def _mlflow_writer():
+    while True:
+        item = _mlflow_queue.get()
+        if item is None:
+            break
+        metrics, step = item
+        try:
+            mlflow.log_metrics(metrics, step=step)
+        except Exception:
+            pass
+
+_mlflow_thread = threading.Thread(target=_mlflow_writer, daemon=True)
+_mlflow_thread.start()
 
 
 def get_norm(module):
-    grad_norm = 0.0
-    for p in module.parameters():
-        if p.grad is not None:
-            grad_norm += p.grad.data.norm(2).item() ** 2
-    grad_norm = grad_norm ** 0.5
-    return grad_norm
+    """计算模块梯度的 L2 norm (GPU 上累积, 只一次 sync)."""
+    params = [p for p in module.parameters() if p.grad is not None]
+    if not params:
+        return 0.0
+    # 利用 clip_grad_norm_ 的 fused multi-tensor kernel, max_norm=inf 不做裁剪
+    return torch.nn.utils.clip_grad_norm_(params, max_norm=float('inf')).item()
     
 def compute_update_ratio(module, param_cache):
     if module is None or len(param_cache) == 0:
         return 0.0
-    total_delta_norm = 0.0
-    total_param_norm = 0.0
+    device = next(module.parameters()).device
+    total_delta_sq = torch.zeros(1, device=device)
+    total_param_sq = torch.zeros(1, device=device)
     for name, p in module.named_parameters():
         if name in param_cache:
             delta = p.data - param_cache[name]
-            total_delta_norm += delta.norm(2).item() ** 2
-            total_param_norm += param_cache[name].norm(2).item() ** 2
-    if total_param_norm > 0:
-        return (total_delta_norm ** 0.5) / (total_param_norm ** 0.5)
+            total_delta_sq += delta.norm(2) ** 2
+            total_param_sq += param_cache[name].norm(2) ** 2
+    if total_param_sq.item() > 0:
+        return (total_delta_sq.sqrt() / total_param_sq.sqrt()).item()
     else:
         return 0.0
 
@@ -356,7 +375,8 @@ if __name__ == '__main__':
     epoch = train_pipeline.start_epoch
     for epoch in range(train_pipeline.start_epoch, cfg.optims.num_epoch):
         epoch_start_time = time.time()
-        epoch_losses = []
+        epoch_loss_sum = torch.zeros(1, device=fabric.device, dtype=torch.float32)
+        epoch_loss_count = 0
         
         train_pipeline.train()
         
@@ -399,13 +419,14 @@ if __name__ == '__main__':
                     # 源代码的梯度裁剪
                     fabric.clip_gradients(model, optimizer, max_norm=cfg.optims.max_grad_norm)
                     optimizer.step()
-                    optimizer.zero_grad()
+                    optimizer.zero_grad(set_to_none=True)
 
             scheduler_step(lr_scheduler, step)
             last_lr = get_last_lr(optimizer)
             
-            # 记录loss
-            epoch_losses.append(loss.item())
+            # 记录loss (GPU上累积, 不触发sync)
+            epoch_loss_sum.add_(loss.detach().float())
+            epoch_loss_count += 1
             
             n_images_seen += cfg.trainers.total_batch_size
             step += 1
@@ -424,7 +445,7 @@ if __name__ == '__main__':
                 log_dict['trainer/global_step'] = step
                 log_dict['trainer/epoch'] = epoch
                 
-                log_dict['train/mean_loss'] = np.mean(epoch_losses) if epoch_losses else 0.0
+                log_dict['train/mean_loss'] = (epoch_loss_sum / epoch_loss_count).item() if epoch_loss_count > 0 else 0.0
                 log_dict['train/grad_norm_backbone']= grad_norm_backbone
                 log_dict['train/grad_norm_classifier']= grad_norm_classifier
                 log_dict['train/update_ratio_backbone']= update_ratio_backbone
@@ -433,7 +454,7 @@ if __name__ == '__main__':
                 log_dict = log_classifier(classifier, log_dict)
 
                 fabric.log_dict(log_dict, step=step)
-                # MLflow 记录训练指标 (仅 rank 0)
+                # MLflow 记录训练指标 (仅 rank 0, 异步写入)
                 if fabric.local_rank == 0:
                     mlflow_metrics = {}
                     for k, v in log_dict.items():
@@ -441,11 +462,14 @@ if __name__ == '__main__':
                             mlflow_metrics[k] = v.detach().cpu().item()
                         elif isinstance(v, (int, float)):
                             mlflow_metrics[k] = float(v)
-                    mlflow.log_metrics(mlflow_metrics, step=step)
+                    _mlflow_queue.put((mlflow_metrics, step))
 
             speed = cfg.trainers.batch_size / (time.time() - tic)
             speed_total = speed * fabric.world_size
-            pbar.set_description(f"Epoch {epoch} | Step {step} | Batch {batch_idx} | Speed {speed_total:.0f} | LR {last_lr:.5f} | Loss {loss:.4f}")
+            if batch_idx % 10 == 0:
+                # 每 10 batch 更新 pbar, 避免每 batch 都 format tensor (.item() sync)
+                loss_val = loss.item()
+                pbar.set_description(f"Epoch {epoch} | Step {step} | Batch {batch_idx} | Speed {speed_total:.0f} | LR {last_lr:.5f} | Loss {loss_val:.4f}")
             pbar.update(1)
             tic = time.time()
         
@@ -457,7 +481,7 @@ if __name__ == '__main__':
 
 
         # 计算epoch平均损失
-        avg_epoch_loss = np.mean(epoch_losses) if epoch_losses else float('inf')
+        avg_epoch_loss = (epoch_loss_sum / epoch_loss_count).item() if epoch_loss_count > 0 else float('inf')
 
 
         # validation (skip when only classifier is training — model embeddings unchanged)
@@ -504,7 +528,7 @@ if __name__ == '__main__':
                     fabric.log_dict(summary_dict)
                     # MLflow 记录评估指标
                     mlflow_eval = {k.replace("@", "_at_"): float(v) for k, v in summary_dict.items() if isinstance(v, (int, float))}
-                    mlflow.log_metrics(mlflow_eval, step=step)
+                    _mlflow_queue.put((mlflow_eval, step))
                     summary_result = pd.DataFrame(pd.Series(summary_dict), columns=['val'])
                     summary_result.to_csv(os.path.join(cfg.trainers.output_dir, f'result/eval_summary_{epoch}_{step}.csv'))
                 else:
@@ -603,7 +627,7 @@ if __name__ == '__main__':
             fabric.log_dict(summary_dict)
             # MLflow 记录最终评估指标
             mlflow_final = {k.replace("@", "_at_"): float(v) for k, v in summary_dict.items() if isinstance(v, (int, float, np.floating))}
-            mlflow.log_metrics(mlflow_final, step=step)
+            _mlflow_queue.put((mlflow_final, step))
             pd.DataFrame(pd.Series(summary_dict), columns=['val']).to_csv(
                 os.path.join(cfg.trainers.output_dir, f'result/eval_summary_best.csv'))
     else:
@@ -611,5 +635,8 @@ if __name__ == '__main__':
 
     # close
     if fabric.local_rank == 0:
+        # 等待 MLflow 异步队列写完再关闭
+        _mlflow_queue.put(None)
+        _mlflow_thread.join(timeout=30)
         mlflow.end_run()
     print('done')
