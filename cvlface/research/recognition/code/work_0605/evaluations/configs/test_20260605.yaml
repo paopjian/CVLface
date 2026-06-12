@@ -26,15 +26,21 @@ per_epoch_evaluations: {
     'path': 'test_1201',
     'evaluation_type': 'custom_verification4',
     'color_space': 'RGB',
-    'batch_size': 512,
+    'batch_size': 256,
     'num_workers': 5
   },
    "IJBC_gt_aligned": {
     'path': 'facerec_val/IJBC_gt_aligned',
     'evaluation_type': 'ijbbc',
     'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+  "ijbc": {
+    'path': 'facerec_val/IJBC_gt_aligned',
+    'evaluation_type': 'ijbc_custom',
+    'color_space': 'RGB',
     'batch_size': 512,
     'num_workers': 5
   },
-
 }

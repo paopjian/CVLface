@@ -907,9 +907,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
         if embeddings is not None:
             del embeddings
             torch.cuda.empty_cache()
-        import gc
-        gc.collect()
-        
+
         return result
 
 

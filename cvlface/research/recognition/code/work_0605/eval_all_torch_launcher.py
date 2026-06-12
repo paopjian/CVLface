@@ -3,11 +3,12 @@
 彻底避免内存累积问题。
 wandb 统一在 launcher 中记录，每个子进程只保存 CSV 结果。
 
-python eval_all_2_launcher.py \
+python eval_all_torch_launcher.py \
   --eval_config_name test_20260213 \
   --ckpt_dir /data2/dataset_0213_rec/train_output/ft_ir101_s3_full_02-21_0/checkpoints_every_epoch \
   --project_name work_0213_eval_all_s2 \
-  --name s3_0221
+  --name s3_0221 \
+  --compile --timing
 
 """
 import os
@@ -96,6 +97,11 @@ if __name__ == '__main__':
     parser.add_argument('--project_name', type=str, default="work_0920_eval_all2")
     parser.add_argument('--timeout_minutes', type=int, default=60, help='单个 checkpoint 评估超时时间(分钟)，超时后 kill 并重试')
     parser.add_argument('--max_retries', type=int, default=2, help='超时后最大重试次数')
+    parser.add_argument('--compile', action='store_true', help='启用 torch.compile 加速推理')
+    parser.add_argument('--compile_mode', type=str, default='reduce-overhead',
+                        choices=['default', 'reduce-overhead', 'max-autotune'],
+                        help='torch.compile 模式')
+    parser.add_argument('--timing', action='store_true', help='启用每个评估器的计时输出')
     args = parser.parse_args()
 
     if args.name == '' or args.project_name == '':
@@ -148,7 +154,7 @@ if __name__ == '__main__':
         print(f"创建新 wandb run: {wandb_run.id}")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    single_eval_script = os.path.join(script_dir, 'eval_all_2_single.py')
+    single_eval_script = os.path.join(script_dir, 'eval_all_torch_single.py')
     # sorted_paths= [sorted_paths[0]]
     for i, path in enumerate(sorted_paths):
         print(f"\n{'='*60}")
@@ -156,7 +162,7 @@ if __name__ == '__main__':
         print(f"{'='*60}")
 
         cmd = [
-            'lightning', 'run', 'model',
+            'fabric', 'run',
             f'--strategy=ddp',
             f'--devices={args.num_gpu}',
             f'--precision={args.precision}',
@@ -169,6 +175,11 @@ if __name__ == '__main__':
             '--num_gpu', str(args.num_gpu),
             '--precision', args.precision,
         ]
+        if args.compile:
+            cmd.append('--compile')
+            cmd.extend(['--compile_mode', args.compile_mode])
+        if args.timing:
+            cmd.append('--timing')
 
         env = os.environ.copy()
         env['LIGHTING_TESTING'] = '1'

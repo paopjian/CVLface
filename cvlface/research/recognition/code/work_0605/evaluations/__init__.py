@@ -24,10 +24,9 @@ def get_evaluator_by_name(eval_type, name, eval_data_path, transform, fabric, ba
         if eval_type == 'custom_verification':
             type_param = None
         else:
-            # 提取数字部分,例如 'custom_verification2' -> '2'
             type_param = eval_type.replace('custom_verification', '')
         return CustomVerificationEvaluator(name, eval_data_path, transform, fabric, batch_size, num_workers, type=type_param)
-    
+
     else:
         raise ValueError('Unknown evaluation type: %s' % eval_type)
 

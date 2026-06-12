@@ -1,6 +1,10 @@
 """
-单 checkpoint 评估脚本，由 eval_all_2_launcher.py 调用。
+单 checkpoint 评估脚本，由 eval_all_torch_launcher.py 调用。
 每个 checkpoint 在独立进程中运行，进程结束后内存自动全部释放。
+
+开关:
+  --compile       启用 torch.compile 加速推理
+  --timing        启用每个评估器的计时输出
 """
 import pyrootutils
 root = pyrootutils.setup_root(
@@ -12,6 +16,7 @@ root = pyrootutils.setup_root(
 import os, sys
 sys.path.append(os.path.join(root))
 import numpy as np
+import time
 
 import torch
 import pandas as pd
@@ -69,10 +74,16 @@ if __name__ == '__main__':
     parser.add_argument('--single_ckpt_path', type=str, required=True)
     parser.add_argument('--name', type=str, default="")
     parser.add_argument('--project_name', type=str, default="work_0920_eval_all2")
+    parser.add_argument('--compile', action='store_true', help='启用 torch.compile 加速推理')
+    parser.add_argument('--compile_mode', type=str, default='reduce-overhead',
+                        choices=['default', 'reduce-overhead', 'max-autotune'],
+                        help='torch.compile 模式')
+    parser.add_argument('--timing', action='store_true', help='启用每个评估器的计时输出')
     args = parser.parse_args()
 
     path = args.single_ckpt_path
     print(f"评估 checkpoint: {path}")
+    print(f"  compile={args.compile}, timing={args.timing}")
 
     # setup fabric
     csv_logger_dir = os.path.join(root, 'research/recognition/experiments', 'eval_all', args.name)
@@ -99,12 +110,28 @@ if __name__ == '__main__':
 
     # load model
     model_config = load_config(os.path.join(path, 'model.yaml'))
-    model_config.start_from = ''  # ← 加这一行，避免重复加载训练时的初始权重
-    model_config.freeze = False   # ← 评估时不冻结参数，避免 DDP 因无 requires_grad=True 参数报错
+    model_config.start_from = ''
+    model_config.freeze = False
     model = get_model(model_config, task)
     model.load_state_dict_from_path(os.path.join(path, 'model.pt'))
 
-    # model = torch.compile(model)
+    # torch.compile (必须在 fabric.setup 之前，否则 DDP wrapper 导致 graph break 退化为 eager)
+    if args.compile:
+        print(f"  torch.compile mode: {args.compile_mode}")
+        model = torch.compile(model, mode=args.compile_mode)
+        # rank 0 先触发编译 (dummy forward 写入 inductor cache)，其他 rank 等待后命中 cache
+        if fabric.world_size > 1:
+            model.cuda()
+            if fabric.global_rank == 0:
+                print("Rank 0: 触发 torch.compile 编译...")
+                compile_start = time.time()
+                dummy = torch.randn(1, 3, 112, 112, device='cuda')
+                with torch.no_grad():
+                    _ = model(dummy)
+                del dummy
+                torch.cuda.empty_cache()
+                print(f"Rank 0: 编译完成, 耗时 {time.time() - compile_start:.1f}s")
+            fabric.barrier()
 
     # load aligner
     aligner_config = load_config(os.path.join(root, 'research/recognition/code/', 'run_v1', f'aligners/configs/none.yaml'))
@@ -146,12 +173,23 @@ if __name__ == '__main__':
     # Evaluation
     print('Evaluation Started')
     all_result = {}
+    timing_results = {}
     path_name = os.path.basename(path)
     epoch = get_epoch_num(path_name)
+    total_start = time.time()
+
     for evaluator in evaluators:
         if fabric.local_rank == 0:
             print(f"Evaluating {evaluator.name}")
+        eval_start = time.time()
         result = evaluator.evaluate(eval_pipeline, epoch=epoch, step=0, n_images_seen=0)
+        eval_elapsed = time.time() - eval_start
+
+        if args.timing:
+            timing_results[evaluator.name] = eval_elapsed
+            if fabric.local_rank == 0:
+                print(f"  [{evaluator.name}] 耗时: {eval_elapsed:.2f}s")
+
         if fabric.local_rank == 0:
             print(f"{evaluator.name}")
             print(result)
@@ -162,21 +200,41 @@ if __name__ == '__main__':
     if combined_config:
         print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
         if fabric.local_rank == 0:
-            import time as _time
             from evaluations import run_combined_evaluations
             evaluators_dict = {e.name: e for e in evaluators}
-            combined_start = _time.time()
+            combined_start = time.time()
             combined_result = run_combined_evaluations(evaluators_dict, combined_config)
             all_result.update(combined_result)
-            print(f'合并评估完成，耗时: {(_time.time() - combined_start) / 60:.2f} mins')
+            combined_elapsed = time.time() - combined_start
+            print(f'合并评估完成，耗时: {combined_elapsed / 60:.2f} mins')
+            if args.timing:
+                timing_results['combined_evaluations'] = combined_elapsed
         fabric.barrier()
 
+    total_elapsed = time.time() - total_start
+
     if fabric.local_rank == 0:
+        # 计时汇总
+        if args.timing:
+            print(f"\n{'='*50}")
+            print(f"计时汇总:")
+            print(f"{'='*50}")
+            for name, elapsed in timing_results.items():
+                print(f"  {name}: {elapsed:.2f}s ({elapsed/60:.2f}min)")
+            print(f"  {'─'*40}")
+            print(f"  总耗时: {total_elapsed:.2f}s ({total_elapsed/60:.2f}min)")
+            print(f"{'='*50}\n")
+
         print(f'csv输出目录{output_dir}')
         os.makedirs(os.path.join(output_dir, 'result'), exist_ok=True)
         save_result = pd.DataFrame(pd.Series(all_result), columns=['val'])
         save_result.to_csv(os.path.join(output_dir, f'result/eval_final.csv'))
         mean, summary_dict = summary(save_result, epoch=epoch, step=0, n_images_seen=0)
+        # 将计时信息也写入 summary
+        if args.timing:
+            summary_dict['timing/total_sec'] = total_elapsed
+            for name, elapsed in timing_results.items():
+                summary_dict[f'timing/{name}_sec'] = elapsed
         fabric.log_dict(summary_dict)
         summary_result = pd.DataFrame(pd.Series(summary_dict), columns=['val'])
         summary_result.to_csv(os.path.join(output_dir, f'result/eval_summary_final.csv'))
