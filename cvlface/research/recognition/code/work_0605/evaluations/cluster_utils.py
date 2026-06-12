@@ -1775,8 +1775,7 @@ def get_sim_matrix_large_scale_v4(
     print(f"计算总耗时: {time.time() - start:.2f} 秒")
 
     # 释放各 GPU 上的 CUDA 缓存（ids_full / hist 等 worker 残留）
-    import gc
-    gc.collect()
+    # 注意: 不调用 gc.collect()，大规模计算后其遍历对象图极慢（可达数百秒）
     for gid in range(num_gpus):
         with torch.cuda.device(gid):
             torch.cuda.empty_cache()

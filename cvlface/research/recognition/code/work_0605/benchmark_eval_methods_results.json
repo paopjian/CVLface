@@ -1,0 +1,56 @@
+{
+  "FP32 无compile": {
+    "timings": {},
+    "returncode": 1,
+    "error": "-15 (pid: 1848839)  (SIGTERM)\n  error_file: <N/A>\n  traceback : Signal 15 (SIGTERM) received by PID 1848839\n------------------------------------------------------------\nRoot Cause (first observed failure):\n[0]:\n  time      : 2026-06-12_08:11:23\n  host      : star\n  rank      : 5 (local_rank: 5)\n  exitcode  : 1 (pid: 1848838) \n  error_file: <N/A>\n  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html\n============================================================\n"
+  },
+  "BF16 无compile": {
+    "timings": {
+      "work_0605_3t": 198.02,
+      "work_0605_enhance": 12.66,
+      "work_0605_glint": 338.09,
+      "cplfw": 6.57,
+      "calfw": 7.02,
+      "agedb_30": 7.01,
+      "tinyface": 53.83,
+      "total_sec": 623.2,
+      "wall_time": 664.5201539993286
+    },
+    "returncode": 0
+  },
+  "compile BF16": {
+    "timings": {
+      "work_0605_3t": 326.58,
+      "work_0605_enhance": 27.23,
+      "work_0605_glint": 305.22,
+      "cplfw": 6.91,
+      "calfw": 6.83,
+      "agedb_30": 6.77,
+      "tinyface": 51.82,
+      "total_sec": 731.36,
+      "wall_time": 874.5827760696411
+    },
+    "returncode": 0
+  },
+  "TRT FP16": {
+    "timings": {
+      "trt_build": 58.3,
+      "work_0605_3t_extract": 102.3,
+      "work_0605_3t_metric": 28.2,
+      "work_0605_enhance_extract": 62.9,
+      "work_0605_enhance_metric": 2.0,
+      "work_0605_glint_extract": 127.5,
+      "work_0605_glint_metric": 56.2,
+      "cplfw_extract": 26.4,
+      "cplfw_metric": 5.4,
+      "calfw_extract": 29.8,
+      "calfw_metric": 5.4,
+      "agedb_30_extract": 30.0,
+      "agedb_30_metric": 4.9,
+      "tinyface_extract": 38.2,
+      "tinyface_metric": 23.0,
+      "wall_time": 616.4928069114685
+    },
+    "returncode": 0
+  }
+}

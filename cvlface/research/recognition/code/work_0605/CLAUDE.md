@@ -1,14 +1,18 @@
 # CLAUDE.md
 
+使用conda的cvlface环境运行代码
+
+使用中文进行交互
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-This is the `work_0605` experiment workspace within CVLface_lmdb — a face recognition training and evaluation framework built on PyTorch and Lightning Fabric. It focuses on fine-tuning pretrained face recognition backbones (primarily iResNet-101 from AdaFace/WebFace12M) on custom datasets, with multi-GPU DDP support.
+This is the `work_0605` experiment workspace within CVLface_folder — a face recognition training and evaluation framework built on PyTorch and Lightning Fabric. It focuses on fine-tuning pretrained face recognition backbones (primarily iResNet-101 from AdaFace/WebFace12M) on custom datasets, with multi-GPU DDP support.
 
-The Python import root is `cvlface/` (located at `/root/zhaokj/CVLface_lmdb/cvlface/`, marked by `__root__.txt`). `pyrootutils` adds this to `sys.path`, enabling imports like `from general_utils import ...`.
+The Python import root is `cvlface/` (located at `/root/zhaokj/CVLface_folder/cvlface/`, marked by `__root__.txt`). `pyrootutils` adds this to `sys.path`, enabling imports like `from general_utils import ...`.
 
-This repo variant (`CVLface_lmdb`) adds LMDB as a data format alongside the original MXNet RecordIO.
+This repo variant (`CVLface_folder`) adds LMDB as a data format alongside the original MXNet RecordIO.
 
 ## Commands
 

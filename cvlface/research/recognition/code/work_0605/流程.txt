@@ -21,12 +21,12 @@
 # 注意: fabric run 需要 LD_LIBRARY_PATH 修复 scipy/libstdc++ 兼容问题
 ################################################################################
 
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6
-export LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export LD_LIBRARY_PATH=/root/anaconda/envs/cvlface/lib:$LD_LIBRARY_PATH
 export DECODE_BACKEND=turbojpeg
 
 # 公共参数
-COMMON="trainers.num_gpu=7 trainers.batch_size=256 trainers.num_workers=8 \
+COMMON="trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
 trainers.precision=bf16-mixed \
 models=iresnet/configs/v1_ir101.yaml \
 models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
@@ -43,7 +43,7 @@ dataset.model_save_dir=/data1/dataset_0605/train_output"
 # 目的: 在冻结backbone上训练分类器, 让FC权重适应新数据分布
 ################################################################################
 
-conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
+fabric run --devices=8 --precision="bf16-mixed" \
     train5.py \
     trainers.prefix=ft_ir101_s1_cls_warmup_0605 \
     $COMMON \
@@ -54,11 +54,11 @@ conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
     optims.momentum=0.9 optims.weight_decay=0.0001 \
     optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
     trainers.skip_final_eval=True
-
+Epoch 0 | Step 553 | Batch 552 | Speed 18288 | LR 0.00049 | Loss 42.0000:   6%|██▏  | 553/9053 [02:16<31:56,  4.43it/s]
 conda activate cvlface 
-fabric run --devices=7 --precision="bf16-mixed" \
+fabric run --devices=8 --precision="bf16-mixed" \
     train_opt.py \
-    trainers.prefix=ft_ir101_s1_cls_warmup_0605 \
+    trainers.prefix=s1_warmup_0605 \
     $COMMON \
     models.freeze=True \
     pefts=configs/freeze.yaml trainers.batch_size=512\
@@ -67,6 +67,21 @@ fabric run --devices=7 --precision="bf16-mixed" \
     optims.momentum=0.9 optims.weight_decay=0.0001 \
     optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
     trainers.skip_final_eval=True
+Epoch 4 | Step 45265 | Batch 9052 | Speed 30126 | LR 0.00072 | Loss 7.0938: 100%|█████████████████████████████████| 9053/9053 [22:59<00:00,  6.56it/s]
+
+优化后,使用rec文件
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    trainers.prefix=s1_warmup_0605 \
+    $COMMON \
+    models.freeze=True \
+    pefts=configs/freeze.yaml trainers.batch_size=512\
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=True
+Epoch 0 | Step 9053 | Batch 9052 | Speed 30218 | LR 0.00800 | Loss 19.1250: 100%|█████████████████████████████████| 9053/9053 [23:26<00:00,  6.43it/s]
 
 ################################################################################
 # 阶段2: body.36解冻训练, 分类器冻结
@@ -76,12 +91,13 @@ fabric run --devices=7 --precision="bf16-mixed" \
 ################################################################################
 
 # >>> 根据阶段1输出修改 STAGE1_CKPT 路径 <<<
-STAGE1_CKPT="/data1/dataset_0605/train_output/ft_ir101_s1_cls_warmup_0605_06-08_2/checkpoints_every_epoch/epoch:4_step:51735"
+STAGE1_CKPT="/data1/dataset_0605/train_output/s1_warmup_0605_06-10_3/checkpoints_every_epoch/epoch:4_step:45265"
 
-conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
+conda run -n cvlface 
+fabric run --devices=8 --precision="bf16-mixed" \
     train5.py \
     trainers.prefix=ft_ir101_s2_body36_0605 \
-    trainers.num_gpu=7 trainers.batch_size=512 trainers.num_workers=8 \
+    trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
     models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
@@ -96,11 +112,33 @@ conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
     optims.warmup_epoch=2 \
     optims.momentum=0.9 optims.weight_decay=0.0005 \
     optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
-    optims.scheduler='cosine \
+    optims.scheduler='cosine' \
     trainers.skip_final_eval=True \
     evaluations=configs/val_20260605.yaml \
     dataset.model_save_dir=/data1/dataset_0605/train_output
 
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    $COMMON \
+    trainers.prefix=s2_body36_0605 \
+    trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+    models.freeze=True \
+    classifiers.freeze=True \
+    data_augs=configs/gridsample_v2_numpy.yaml \
+    pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
+    pefts.classifier_ckpt_dir=${STAGE1_CKPT} \
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=15 \
+    optims.warmup_epoch=2 \
+    optims.momentum=0.9 optims.weight_decay=0.0005 \
+    optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+    optims.scheduler='cosine' \
+    trainers.skip_final_eval=True \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
 
 ################################################################################
 # 阶段3: 分类器训练 (backbone冻结, 从阶段2继续)
@@ -111,20 +149,20 @@ conda run -n cvlface fabric run --devices=7 --precision="bf16-mixed" \
 # >>> 根据阶段2输出修改 STAGE2_CKPT 路径 <<<
 STAGE2_CKPT="/data1/dataset_0605/train_output/ft_ir101_s2_body36_0605_06-XX_0/checkpoints_every_epoch/epoch:7_step:XXXXX"
 
-conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mixed" \
-    train5.py \
-    trainers.prefix=ft_ir101_s3_cls_retrain_0605 \
-    trainers.num_gpu=7 trainers.batch_size=256 trainers.num_workers=8 \
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    trainers.prefix=s3_classifier_0605 \
+    trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
-    models.start_from=${STAGE2_CKPT}/model.pt \
+    models.start_from=/data1/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch/epoch:14_step:135795/model.pt \
     models.freeze=True \
     dataset=configs/dataset_0605_train_rec.yaml \
-    data_augs=configs/basic_v2_numpy.yaml \
+    data_augs=configs/gridsample_v2_numpy.yaml \
     classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
     losses=configs/adaface.yaml \
     pefts=configs/freeze.yaml \
-    pefts.classifier_ckpt_dir=${STAGE2_CKPT} \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch/epoch:14_step:135795 \
     optims=configs/step_sgd.yaml \
     optims.lr=0.006 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
     optims.momentum=0.9 optims.weight_decay=0.0001 \
@@ -141,12 +179,12 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
 ################################################################################
 
 # >>> 根据阶段3输出修改 STAGE3_CKPT 路径 <<<
-STAGE3_CKPT="/data1/dataset_0605/train_output/ft_ir101_s3_cls_retrain_0605_06-XX_0/checkpoints_every_epoch/epoch:4_step:XXXXX"
+STAGE3_CKPT="/data1/dataset_0605/train_output/s3_classifier_0605_06-11_1/checkpoints_every_epoch/epoch:4_step:45265"
 
-conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mixed" \
+conda run -n cvlface fabric run --strategy=ddp --devices=8 --precision="bf16-mixed" \
     train5.py \
     trainers.prefix=ft_ir101_s4_full_0605 \
-    trainers.num_gpu=7 trainers.batch_size=256 trainers.num_workers=8 \
+    trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
     models.start_from=${STAGE3_CKPT}/model.pt \
@@ -165,6 +203,28 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
     evaluations=configs/val_20260605.yaml \
     dataset.model_save_dir=/data1/dataset_0605/train_output
 
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    $COMMON \
+    trainers.prefix=s4_full_0605 \
+    trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=/data1/dataset_0605/train_output/s3_classifier_0605_06-11_1/checkpoints_every_epoch/epoch:4_step:45265/model.pt \
+    classifiers.freeze=True \
+    data_augs=configs/gridsample_v2_numpy.yaml \
+    pefts=configs/full.yaml \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s3_classifier_0605_06-11_1/checkpoints_every_epoch/epoch:4_step:45265 \
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.0008 optims.num_epoch=15 \
+    optims.warmup_epoch=2 \
+    optims.momentum=0.9 optims.weight_decay=0.0005 \
+    optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+    optims.scheduler='cosine' \
+    trainers.skip_final_eval=True \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
+
 
 ################################################################################
 # 最终测试评估 (使用阶段4的best checkpoint)
@@ -173,7 +233,7 @@ conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mix
 # >>> 根据阶段4输出修改 FINAL_CKPT 路径 <<<
 FINAL_CKPT="/data1/dataset_0605/train_output/ft_ir101_s4_full_0605_06-XX_0/checkpoints_every_epoch/best"
 
-conda run -n cvlface fabric run --strategy=ddp --devices=7 --precision="bf16-mixed" \
+conda run -n cvlface fabric run --strategy=ddp --devices=8 --precision="bf16-mixed" \
     eval.py --num_gpu 7 --eval_config_name test_20260605 --ckpt_dir ${FINAL_CKPT}
 
 
