@@ -41,17 +41,23 @@ class MXFaceDataset(Dataset):
         header, _ = RecordIOReader.unpack(s)
         if header.flag > 0:
             self.header0 = (int(header.label[0]), int(header.label[1]))
-            self.imgidx = np.array(range(1, int(header.label[0])))
+            n = int(header.label[0])
+            # float32 精度丢失可能导致 n 偏大(>16M样本时), 用 idx 实际最大键修正
+            max_valid = max(self.imgrec.keys)
+            n = min(n, max_valid + 1)
+            self.imgidx = np.array(range(1, n))
         else:
             self.imgidx = np.array(list(self.imgrec.keys))
 
         info_path = os.path.join(root_dir, 'train.tsv')
-        if os.path.isfile(info_path):
-            self.info = pd.read_csv(os.path.join(root_dir, 'train.tsv'), sep='\t', header=None)
-            self.info.columns = ['_idx', 'path', 'label']
-        else:
-            self.info = iterate_record(self.imgidx, self.imgrec)
-            self.info.to_csv(info_path, sep='\t', header=False, index=False)
+        if not os.path.isfile(info_path):
+            if local_rank == 0:
+                info = iterate_record(self.imgidx, self.imgrec)
+                info.to_csv(info_path, sep='\t', header=False, index=False)
+            if torch.distributed.is_initialized():
+                torch.distributed.barrier()
+        self.info = pd.read_csv(info_path, sep='\t', header=None)
+        self.info.columns = ['_idx', 'path', 'label']
 
         atexit.register(self.dispose)
 
