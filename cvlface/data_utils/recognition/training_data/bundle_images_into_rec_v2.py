@@ -1,10 +1,17 @@
 """
-打包 /data1/dataset_0605/train 为 RecordIO 格式
-与 mxnet 版本完全兼容: 无 header 记录, 索引从 0 开始, 统一 JPEG 编码
-4 读线程分段预读 + 单线程顺序写入, NVMe 上约 15000 img/s
+Bundle images into RecordIO format (no mxnet dependency).
+Compatible with mxnet RecordIO: no header record, index starts from 0, uniform JPEG encoding.
+8 reader threads + sequential write, ~13K-15K img/s on NVMe.
 
-用法:
-    python scripts/benchmark/bundle_rec_large.py
+Usage:
+    python bundle_images_into_rec_v2.py --source_dir /path/to/images
+    python bundle_images_into_rec_v2.py --source_dir /path/to/images --save_dir /path/to/output
+    python bundle_images_into_rec_v2.py --source_dir /path/to/images --remove_images
+
+Images should be stored in a directory structure where each subfolder is named
+after the label and contains images for that label:
+    source_dir/label1/image1.jpg
+    source_dir/label2/image2.png
 """
 import os
 import re
@@ -12,6 +19,7 @@ import io
 import struct
 import json
 import time
+import argparse
 from multiprocessing import Pool, cpu_count
 from threading import Thread
 from queue import Queue
@@ -19,11 +27,9 @@ from tqdm import tqdm
 from PIL import Image
 
 
-SOURCE_DIR = '/data1/dataset_0605/train'
-SAVE_DIR = '/data1/dataset_0605/train_rec2'
-
 kMagic = 0xced7230a
 JPEG_MAGIC = b'\xff\xd8\xff'
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 NUM_READERS = 8
 
 
@@ -33,10 +39,9 @@ def natural_sort_key(s):
 
 def scan_one_dir(args):
     dirpath, label_name = args
-    exts = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
     files = []
     for f in os.listdir(dirpath):
-        if os.path.splitext(f)[1].lower() in exts:
+        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS:
             files.append(os.path.join(dirpath, f))
     return label_name, sorted(files)
 
@@ -48,7 +53,7 @@ def scan_dataset(source_dir):
     entries = []
     for name in os.listdir(source_dir):
         d = os.path.join(source_dir, name)
-        if os.path.isdir(d):
+        if os.path.isdir(d) and name != 'examples':
             entries.append((d, name))
     entries.sort(key=lambda x: natural_sort_key(x[1]))
 
@@ -77,7 +82,7 @@ def scan_dataset(source_dir):
 
     elapsed = time.time() - t0
     print(f'Found {len(file_list):,} images, {num_classes:,} classes in {elapsed:.1f}s')
-    return file_list, label_list, num_classes, label_map
+    return file_list, label_list, num_classes
 
 
 def ensure_jpeg(img_bytes):
@@ -110,6 +115,11 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
     print(f'\n[RecordIO] Writing to {rec_path}')
     print(f'  {N:,} images, {num_classes:,} classes, {NUM_READERS} reader threads')
 
+    # 删除已有文件
+    for p in [rec_path, idx_path, tsv_path]:
+        if os.path.isfile(p):
+            os.remove(p)
+
     t0 = time.time()
     rec_file = open(rec_path, 'wb', buffering=8*1024*1024)
     idx_file = open(idx_path, 'w', buffering=1*1024*1024)
@@ -141,18 +151,18 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
     for t in threads:
         t.start()
 
-    # 按段顺序消费: 先消费完 reader 0 的全部数据, 再 reader 1, ...
-    pbar = tqdm(total=N, desc='RecordIO')
+    # 按段顺序消费
+    pbar = tqdm(total=N, desc='Writing RecordIO')
     for q in queues:
         while True:
             item = q.get()
             if item is None:
                 break
             i, label, img_bytes = item
-            # record data: flag=0, label=float, id=index, id2=0
+            # record: flag=0, label=float, id=index, id2=0
             data = struct.pack('<IfQQ', 0, float(label), i, 0) + img_bytes
             write_record(i, data)
-            # tsv
+            # tsv: image_index \t label/filename \t label
             filename = os.path.basename(file_list[i])
             tsv_file.write(f'{i}\t{label}/{filename}\t{label}\n')
             pbar.update(1)
@@ -177,6 +187,35 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
 
 
 if __name__ == '__main__':
-    file_list, label_list, num_classes, label_map = scan_dataset(SOURCE_DIR)
-    bundle_recordio(file_list, label_list, num_classes, SAVE_DIR)
-    print('\n完成! RecordIO 路径:', SAVE_DIR)
+    parser = argparse.ArgumentParser(
+        description='Bundle images into RecordIO format (no mxnet dependency). '
+                    'Images should be stored in a directory structure where each '
+                    'subfolder is named after the label and contains images for that label, '
+                    'e.g., label1/image1.png, label2/image2.png.')
+    parser.add_argument('--source_dir', type=str, required=True,
+                        help='Directory containing labeled image folders.')
+    parser.add_argument('--save_dir', default='', type=str,
+                        help='Output directory. Defaults to source_dir.')
+    parser.add_argument('--remove_images', action='store_true',
+                        help='Remove source image directories after bundling.')
+
+    args = parser.parse_args()
+    source_dir = args.source_dir.rstrip('/')
+    if not args.save_dir:
+        save_dir = source_dir
+    else:
+        save_dir = args.save_dir
+
+    file_list, label_list, num_classes = scan_dataset(source_dir)
+    bundle_recordio(file_list, label_list, num_classes, save_dir)
+
+    # remove source image dirs
+    if args.remove_images:
+        import shutil
+        for d in os.listdir(source_dir):
+            full = os.path.join(source_dir, d)
+            if os.path.isdir(full) and d != 'examples':
+                shutil.rmtree(full)
+        print('Source image directories removed.')
+
+    print('\n完成! RecordIO 路径:', save_dir)
