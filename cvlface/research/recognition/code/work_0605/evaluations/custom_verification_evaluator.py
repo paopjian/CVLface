@@ -802,7 +802,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
         
         if self.type == '4':
             # 使用 v4 直方图方式计算
-            from .cluster_utils import get_sim_matrix_large_scale_v4
+            from .cluster_utils import get_sim_matrix_large_scale_v5
 
             query_ids = collection['labels'].numpy()
             start = time.time()
@@ -811,7 +811,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
 
             if self.save_image_path:
                 # 先只算直方图，获取阈值
-                pos_hist, neg_hist = get_sim_matrix_large_scale_v4(
+                pos_hist, neg_hist = get_sim_matrix_large_scale_v5(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
                     num_gpus=7,
@@ -828,7 +828,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 min_threshold = min(thresholds.values())
                 print(f"正在获取高相似度图片对 (threshold >= {min_threshold})...")
 
-                _, _, all_high_sim_pairs = get_sim_matrix_large_scale_v4(
+                _, _, all_high_sim_pairs = get_sim_matrix_large_scale_v5(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
                     num_gpus=7,
@@ -886,11 +886,11 @@ class CustomVerificationEvaluator(BaseEvaluator):
                     save_images(sub_results, os.path.join(save_path, f'{thread_far[th]}'), self.image_dir)
             else:
                 # 不需要保存图片，只算直方图和TPIR
-                pos_hist, neg_hist = get_sim_matrix_large_scale_v4(
+                pos_hist, neg_hist = get_sim_matrix_large_scale_v5(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
                     num_gpus=7,
-                    block_size=2048*2,
+                    block_size=2048*4,
                     show_progress=True,
                 )
 

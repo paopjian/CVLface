@@ -163,7 +163,6 @@ if __name__ == '__main__':
 
         cmd = [
             'fabric', 'run',
-            f'--strategy=ddp',
             f'--devices={args.num_gpu}',
             f'--precision={args.precision}',
             single_eval_script,
@@ -180,6 +179,7 @@ if __name__ == '__main__':
             cmd.extend(['--compile_mode', args.compile_mode])
         if args.timing:
             cmd.append('--timing')
+        cmd.extend(['--timeout_minutes', str(args.timeout_minutes)])
 
         env = os.environ.copy()
         env['LIGHTING_TESTING'] = '1'

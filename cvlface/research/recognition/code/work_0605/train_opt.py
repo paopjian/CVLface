@@ -217,7 +217,8 @@ if __name__ == '__main__':
         loggers.append(wandb_logger)
 
     # grad_max_norm?
-    ddp_strategy = DDPStrategy(timeout=datetime.timedelta(minutes=120))
+    nccl_timeout_min = getattr(cfg.trainers, 'timeout_minutes', 120)
+    ddp_strategy = DDPStrategy(timeout=datetime.timedelta(minutes=nccl_timeout_min))
     fabric = Fabric(precision=cfg.trainers.precision,
                     loggers=loggers,
                     accelerator="auto",

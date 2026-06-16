@@ -139,6 +139,8 @@ serialized = builder.build_serialized_network(network, config)
 
 ### TensorRT Refit 验证 (多 checkpoint 场景)
 
+> **状态: 仅完成单独验证，未集成到评估流水线。实际多 checkpoint 评估仍使用每次重建 engine 的方式。**
+
 问题: 评估 20 个 checkpoint 时，每次都要重建 engine (~25s)，总计额外 8.4 min。
 方案: 构建一次 REFIT-enabled engine，之后每个 checkpoint 只替换权重。
 
@@ -394,9 +396,9 @@ LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH \
   --eval_config_name test_20260605 \
   --ckpt_dir /data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch \
   --project_name work_0605_test \
-  --name s2_body36_0605_06-10_2_torch \
+  --name s2_body36_0605_compile \
   --compile --compile_mode max-autotune --timing \
-  --timeout_minutes 90
+  --timeout_minutes 270
 ```
 
 说明:

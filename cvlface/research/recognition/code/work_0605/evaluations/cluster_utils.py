@@ -1811,3 +1811,343 @@ def get_sim_matrix_large_scale_v4(
             return total_pos_hist.numpy(), total_neg_hist.numpy(), collected_pairs
 
     return total_pos_hist.numpy(), total_neg_hist.numpy()
+
+# ============================================================
+# V5: where(NaN) + masked_fill_ 优化版本
+# 消除 boolean indexing 的动态分配, 支持 FP16/FP32 精度控制
+# ============================================================
+
+def _v5_collect_pairs(sim, mask_2d, row_start, col_start, pair_collector):
+    """V5辅助函数：从2D sim矩阵中直接收集符合条件的样本对"""
+    if pair_collector.is_full():
+        return
+    rows, cols = torch.where(mask_2d)
+    if rows.numel() == 0:
+        return
+    scores = sim[rows, cols]
+    global_i = (rows + row_start).cpu().numpy()
+    global_j = (cols + col_start).cpu().numpy()
+    scores_cpu = scores.cpu().numpy()
+    current_pairs = list(zip(global_i, global_j, scores_cpu))
+    pair_collector.add_pairs(current_pairs)
+
+# ============================================================
+# V5 GPU Worker
+# ============================================================
+
+def _v5_gpu_worker(
+    feats, ids, pool, gpu_id,
+    hist_bins, hist_range,
+    collect_pairs_config,
+    pair_collector, pos_pair_collector, neg_pair_collector,
+    memory_mode, precision, pbar, pbar_lock
+):
+    """V5 GPU Worker: masked_fill_(NaN)优化, 消除boolean indexing动态分配"""
+    with torch.cuda.device(gpu_id):
+        device = torch.device(f'cuda:{gpu_id}')
+        NAN = float('nan')
+
+        # ---- 精度设置 ----
+        use_fp16 = (precision == 'fp16')
+        if use_fp16:
+            torch.backends.cuda.matmul.allow_tf32 = True
+
+        # ---- 一次性GPU初始化 ----
+        ids_full = ids.to(device) if torch.is_tensor(ids) else torch.tensor(ids, device=device)
+
+        use_gpu_feats = False
+        feats_source = feats
+        if memory_mode == 'high_performance':
+            try:
+                feats_source = feats.to(device)
+                use_gpu_feats = True
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    torch.cuda.empty_cache()
+                    feats_source = feats
+                else:
+                    raise
+
+        # 解析收集配置
+        do_collect_single = False
+        do_collect_dual = False
+        sample_type = threshold_mode = threshold_val = None
+        pos_cfg = neg_cfg = None
+
+        if collect_pairs_config is not None:
+            if 'pos' in collect_pairs_config or 'neg' in collect_pairs_config:
+                do_collect_dual = True
+                pos_cfg = collect_pairs_config.get('pos', None)
+                neg_cfg = collect_pairs_config.get('neg', None)
+            elif pair_collector is not None:
+                do_collect_single = True
+                sample_type = collect_pairs_config.get('sample_type', 'neg')
+                threshold_mode = collect_pairs_config.get('threshold_mode', 'above')
+                threshold_val = collect_pairs_config.get('threshold', 0.5)
+
+        need_collect = (do_collect_single or do_collect_dual)
+
+        pos_hist = torch.zeros(hist_bins, device=device, dtype=torch.long)
+        neg_hist = torch.zeros(hist_bins, device=device, dtype=torch.long)
+
+        # ---- 动态取块循环 ----
+        while True:
+            batch = pool.get_batch(gpu_id)
+            if not batch:
+                break
+
+            for row_start, row_end, col_start, col_end in batch:
+                if use_gpu_feats:
+                    block1 = feats_source[row_start:row_end]
+                    block2 = feats_source[col_start:col_end]
+                else:
+                    block1 = feats_source[row_start:row_end].to(device, non_blocking=True)
+                    block2 = feats_source[col_start:col_end].to(device, non_blocking=True)
+
+                # matmul
+                if use_fp16:
+                    sim = torch.matmul(block1.half(), block2.half().T).float()
+                else:
+                    sim = torch.matmul(block1, block2.T)
+                del block1, block2
+
+                ids1 = ids_full[row_start:row_end]
+                ids2 = ids_full[col_start:col_end]
+                label_eq = (ids1[:, None] == ids2[None, :])
+
+                # 对角块: in-place遮蔽下三角+对角线
+                is_diag = (row_start == col_start)
+                if is_diag:
+                    triu_mask = torch.triu(
+                        torch.ones(row_end - row_start, col_end - col_start,
+                                   device=device, dtype=torch.bool),
+                        diagonal=1)
+                    sim.masked_fill_(~triu_mask, NAN)
+
+                # -- pair collection 需要原始sim值, 在histogram修改前保存引用 --
+                if need_collect:
+                    # 保存一份sim用于pair collection(histogram会in-place修改sim)
+                    sim_for_pairs = sim.clone()
+
+                # -- histogram: full → pos → neg = full - pos --
+                full_hist = torch.histc(sim, bins=hist_bins,
+                                        min=hist_range[0], max=hist_range[1]).long()
+                sim.masked_fill_(~label_eq, NAN)
+                pos_block = torch.histc(sim, bins=hist_bins,
+                                        min=hist_range[0], max=hist_range[1]).long()
+                pos_hist += pos_block
+                neg_hist += full_hist - pos_block
+                del full_hist, pos_block, sim
+
+                # -- pair collection --
+                if need_collect:
+                    if is_diag:
+                        valid_mask = triu_mask
+                    else:
+                        valid_mask = torch.ones(row_end - row_start, col_end - col_start,
+                                               device=device, dtype=torch.bool)
+
+                    if do_collect_single and not pair_collector.is_full():
+                        if sample_type == 'pos':
+                            pos_valid = label_eq & valid_mask
+                            if threshold_mode == 'above':
+                                target = pos_valid & (sim_for_pairs > threshold_val)
+                            else:
+                                target = pos_valid & (sim_for_pairs < threshold_val)
+                            _v5_collect_pairs(sim_for_pairs, target, row_start, col_start, pair_collector)
+                            del pos_valid, target
+                        elif sample_type == 'neg':
+                            neg_valid = (~label_eq) & valid_mask
+                            if threshold_mode == 'above':
+                                target = neg_valid & (sim_for_pairs > threshold_val)
+                            else:
+                                target = neg_valid & (sim_for_pairs < threshold_val)
+                            _v5_collect_pairs(sim_for_pairs, target, row_start, col_start, pair_collector)
+                            del neg_valid, target
+
+                    if do_collect_dual:
+                        if pos_cfg and pos_pair_collector and not pos_pair_collector.is_full():
+                            pt = pos_cfg.get('threshold_mode', 'below')
+                            pv = pos_cfg.get('threshold', 0.25)
+                            pos_valid = label_eq & valid_mask
+                            if pt == 'above':
+                                target = pos_valid & (sim_for_pairs > pv)
+                            else:
+                                target = pos_valid & (sim_for_pairs < pv)
+                            _v5_collect_pairs(sim_for_pairs, target, row_start, col_start, pos_pair_collector)
+                            del pos_valid, target
+
+                        if neg_cfg and neg_pair_collector and not neg_pair_collector.is_full():
+                            nt = neg_cfg.get('threshold_mode', 'above')
+                            nv = neg_cfg.get('threshold', 0.5)
+                            neg_valid = (~label_eq) & valid_mask
+                            if nt == 'above':
+                                target = neg_valid & (sim_for_pairs > nv)
+                            else:
+                                target = neg_valid & (sim_for_pairs < nv)
+                            _v5_collect_pairs(sim_for_pairs, target, row_start, col_start, neg_pair_collector)
+                            del neg_valid, target
+
+                    del sim_for_pairs, valid_mask
+
+                if is_diag:
+                    del triu_mask
+                del label_eq
+
+                if pbar is not None:
+                    with pbar_lock:
+                        pbar.update(1)
+
+    return pos_hist.cpu(), neg_hist.cpu()
+
+
+def get_sim_matrix_large_scale_v5(
+    query_feats_list, query_ids=None, num_gpus=7, block_size=2048*5,
+    hist_bins=20_000_000, hist_range=(-1.0, 1.0),
+    collect_pairs_config=None, memory_mode='low_memory', show_progress=True,
+    initial_ratio=0.01, subsequent_ratio=0.005,
+    precision='fp32'
+):
+    """
+    基于动态调度的大规模相似度矩阵计算 v5 (where/masked_fill_ 优化版)
+
+    相比v4的改进:
+    - 使用 masked_fill_(NaN) + histc 替代 boolean indexing, 消除动态分配
+    - neg_hist = full_hist - pos_hist, 避免负样本的额外遍历
+    - 支持 FP16 matmul (precision='fp16'), 利用 Tensor Core 加速
+    - 峰值显存更低 (无需分配 flat_sim, flat_labels 等中间张量)
+
+    Args:
+        query_feats_list: 特征矩阵 (numpy array, list, 或 torch.Tensor)
+        query_ids: 身份标签
+        num_gpus: GPU数量
+        block_size: 每个块的大小
+        hist_bins: 直方图bin数量 (默认20M, FP16建议2000)
+        hist_range: 直方图范围
+        collect_pairs_config: 样本对收集配置 (与v4兼容)
+        memory_mode: 'low_memory' 或 'high_performance'
+        show_progress: 是否显示进度条
+        initial_ratio: 每个GPU首次取任务的比例
+        subsequent_ratio: 后续每次取任务的比例
+        precision: 'fp32' 或 'fp16'
+
+    Returns:
+        与v4一致
+    """
+    # 精度建议
+    if precision == 'fp16' and hist_bins != 2000:
+        print(f"[V5建议] FP16精度下有效分辨率约0.001, 当前hist_bins={hist_bins:,}, "
+              f"建议设为2000以获得最佳性能 (当前仍按{hist_bins:,}计算)")
+
+    if query_ids is None:
+        query_ids = np.arange(len(query_feats_list))
+
+    N = len(query_ids)
+
+    # 创建动态任务池
+    pool = DynamicBlockPool(total_size=N, block_size=block_size,
+                            initial_ratio=initial_ratio, subsequent_ratio=subsequent_ratio)
+    total_blocks = pool.total_blocks
+    print(f"动态任务池 v5: 共 {total_blocks} 块, 首批 {pool._initial_batch} 块/GPU, "
+          f"后续 {pool._subsequent_batch} 块/次 | precision={precision}")
+
+    # 准备数据
+    print(f"正在准备数据 (Mode: {memory_mode})...")
+    prep_start = time.time()
+    if isinstance(query_feats_list, list):
+        query_feats_tensor = torch.from_numpy(np.array(query_feats_list))
+    elif isinstance(query_feats_list, np.ndarray):
+        query_feats_tensor = torch.from_numpy(query_feats_list)
+    else:
+        query_feats_tensor = query_feats_list
+
+    if memory_mode == 'low_memory':
+        if query_feats_tensor.is_cuda:
+            query_feats_tensor = query_feats_tensor.cpu()
+        query_feats_tensor = query_feats_tensor.float().contiguous().pin_memory()
+    else:
+        if not query_feats_tensor.is_cuda:
+            query_feats_tensor = query_feats_tensor.float().pin_memory()
+    print(f"数据准备耗时: {time.time() - prep_start:.2f} 秒")
+
+    # 收集器准备
+    pair_collector = None
+    pos_pair_collector = None
+    neg_pair_collector = None
+    is_dual_mode = False
+
+    if collect_pairs_config is not None:
+        if 'pos' in collect_pairs_config or 'neg' in collect_pairs_config:
+            is_dual_mode = True
+            if 'pos' in collect_pairs_config:
+                pos_pair_collector = PairCollector(max_pairs=collect_pairs_config['pos'].get('max_pairs', -1))
+            if 'neg' in collect_pairs_config:
+                neg_pair_collector = PairCollector(max_pairs=collect_pairs_config['neg'].get('max_pairs', -1))
+        else:
+            pair_collector = PairCollector(max_pairs=collect_pairs_config.get('max_pairs', -1))
+
+    start = time.time()
+    results = []
+    pbar = tqdm(total=total_blocks, desc="Matrix Cal v5 (dynamic)", disable=not show_progress)
+    pbar_lock = threading.Lock()
+
+    try:
+        with ThreadPoolExecutor(max_workers=num_gpus) as executor:
+            futures = {}
+            for gpu_id in range(num_gpus):
+                futures[executor.submit(
+                    _v5_gpu_worker,
+                    query_feats_tensor, query_ids, pool, gpu_id,
+                    hist_bins, hist_range, collect_pairs_config,
+                    pair_collector, pos_pair_collector, neg_pair_collector,
+                    memory_mode, precision,
+                    pbar if show_progress else None,
+                    pbar_lock if show_progress else None
+                )] = gpu_id
+            for future in as_completed(futures):
+                try:
+                    results.append(future.result())
+                except Exception as e:
+                    print(f"GPU {futures[future]} failed: {e}")
+                    raise
+    finally:
+        pbar.close()
+
+    print(f"计算总耗时: {time.time() - start:.2f} 秒")
+
+    # 释放各 GPU 上的 CUDA 缓存
+    for gid in range(num_gpus):
+        with torch.cuda.device(gid):
+            torch.cuda.empty_cache()
+
+    # 结果聚合
+    total_pos_hist = torch.zeros(hist_bins, dtype=torch.long)
+    total_neg_hist = torch.zeros(hist_bins, dtype=torch.long)
+    for p_hist, n_hist in results:
+        total_pos_hist += p_hist
+        total_neg_hist += n_hist
+
+    print(f"Total Pos Pairs: {total_pos_hist.sum().item()}")
+    print(f"Total Neg Pairs: {total_neg_hist.sum().item()}")
+
+    if collect_pairs_config is not None:
+        if is_dual_mode:
+            pos_collected = pos_pair_collector.get_pairs() if pos_pair_collector else []
+            neg_collected = neg_pair_collector.get_pairs() if neg_pair_collector else []
+            if pos_collected:
+                pos_tmode = collect_pairs_config['pos'].get('threshold_mode', 'below')
+                pos_collected.sort(key=lambda x: x[2], reverse=(pos_tmode == 'above'))
+                print(f"Collected POS Pairs: {len(pos_collected)}")
+            if neg_collected:
+                neg_tmode = collect_pairs_config['neg'].get('threshold_mode', 'above')
+                neg_collected.sort(key=lambda x: x[2], reverse=(neg_tmode == 'above'))
+                print(f"Collected NEG Pairs: {len(neg_collected)}")
+            return total_pos_hist.numpy(), total_neg_hist.numpy(), pos_collected, neg_collected
+        else:
+            collected_pairs = pair_collector.get_pairs()
+            threshold_mode = collect_pairs_config.get('threshold_mode', 'above')
+            collected_pairs.sort(key=lambda x: x[2], reverse=(threshold_mode == 'above'))
+            print(f"Collected Pairs: {len(collected_pairs)}")
+            return total_pos_hist.numpy(), total_neg_hist.numpy(), collected_pairs
+
+    return total_pos_hist.numpy(), total_neg_hist.numpy()
