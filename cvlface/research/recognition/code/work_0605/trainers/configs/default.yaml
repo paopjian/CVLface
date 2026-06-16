@@ -23,6 +23,7 @@ wandb_entity: 'mckim'
 wandb_log_all: False
 
 resume: ''
+timeout_minutes: 120  # NCCL 通信超时(分钟)，评估耗时长时需增大
 
 local_rank: -1  # placeholder
 world_size: -1  # placeholder

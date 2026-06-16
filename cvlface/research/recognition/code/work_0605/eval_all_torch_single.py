@@ -14,6 +14,7 @@ root = pyrootutils.setup_root(
     dotenv=True,
 )
 import os, sys
+import datetime
 sys.path.append(os.path.join(root))
 import numpy as np
 import time
@@ -28,6 +29,7 @@ from pipelines import pipeline_from_name
 from general_utils.config_utils import load_config
 from evaluations import summary
 from lightning.fabric import Fabric
+from lightning.fabric.strategies import DDPStrategy
 from functools import partial
 from fabric.fabric import setup_dataloader_from_dataset
 import lovely_tensors as lt
@@ -79,6 +81,7 @@ if __name__ == '__main__':
                         choices=['default', 'reduce-overhead', 'max-autotune'],
                         help='torch.compile 模式')
     parser.add_argument('--timing', action='store_true', help='启用每个评估器的计时输出')
+    parser.add_argument('--timeout_minutes', type=int, default=60, help='NCCL 通信超时(分钟)')
     args = parser.parse_args()
 
     path = args.single_ckpt_path
@@ -90,10 +93,11 @@ if __name__ == '__main__':
     os.makedirs(csv_logger_dir, exist_ok=True)
     csv_logger = CSVLogger(root_dir=csv_logger_dir, flush_logs_every_n_steps=1)
     torch.set_float32_matmul_precision('high')
+    ddp_strategy = DDPStrategy(timeout=datetime.timedelta(minutes=args.timeout_minutes))
     fabric = Fabric(
         precision=args.precision,
         accelerator="auto",
-        strategy="ddp",
+        strategy=ddp_strategy,
         devices=args.num_gpu,
         loggers=[csv_logger],
     )

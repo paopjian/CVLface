@@ -70,13 +70,22 @@ class TRTInfer:
         with open(engine_path, 'rb') as f:
             self.engine = runtime.deserialize_cuda_engine(memoryview(f.read()))
         self.context = self.engine.create_execution_context()
-        self.input_name = self.engine.get_tensor_name(0)
-        self.output_name = self.engine.get_tensor_name(1)
+        # 按 tensor_mode 识别 input/output, 不依赖 index 顺序
+        # (TRT 10/11 不保证 input 一定排在 index 0, 取反会导致输出全错)
+        self.input_name, self.output_name = None, None
+        for i in range(self.engine.num_io_tensors):
+            n = self.engine.get_tensor_name(i)
+            if self.engine.get_tensor_mode(n) == trt.TensorIOMode.INPUT:
+                self.input_name = n
+            else:
+                self.output_name = n
+        assert self.input_name and self.output_name, 'IO tensor 识别失败'
         self.d_input = torch.zeros(batch_size, 3, 112, 112, dtype=torch.float16, device='cuda')
         self.d_output = torch.zeros(batch_size, 512, dtype=torch.float16, device='cuda')
         self.context.set_tensor_address(self.input_name, self.d_input.data_ptr())
         self.context.set_tensor_address(self.output_name, self.d_output.data_ptr())
-        self.stream = torch.cuda.Stream()
+        # 用当前 stream, 保证 copy_ 与 execute 顺序一致 (避免跨 stream 竞态)
+        self.stream = torch.cuda.current_stream()
 
     def __call__(self, x):
         total = x.shape[0]
@@ -762,11 +771,16 @@ if __name__ == '__main__':
         all_result.update({eval_name + "/" + k: v for k, v in result.items()})
         del features_normal, features_flip, embeddings
 
-    # 保存结果
+    # 保存结果 (与 torch 版本一致，经 summary() 转换 key 格式)
     all_result['epoch'] = epoch
     save_result = pd.DataFrame(pd.Series(all_result), columns=['val'])
+    save_result.to_csv(os.path.join(output_dir, f'epoch_{epoch}_raw.csv'))
+
+    from evaluations import summary
+    mean, summary_dict = summary(save_result, epoch=epoch, step=0, n_images_seen=0)
+    summary_result = pd.DataFrame(pd.Series(summary_dict), columns=['val'])
     summary_csv = os.path.join(output_dir, f'epoch_{epoch}_summary.csv')
-    save_result.to_csv(summary_csv)
+    summary_result.to_csv(summary_csv)
     print(f"\n结果已保存: {summary_csv}")
 
     # 清理
