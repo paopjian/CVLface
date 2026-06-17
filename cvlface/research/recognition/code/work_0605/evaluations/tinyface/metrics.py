@@ -22,6 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import torch
 import numpy as np
 from warnings import warn
 
@@ -165,25 +166,28 @@ def DIR_FAR(score_mat, label_mat, ranks=[1], FARs=[1.0], get_false_indices=False
     print('mate probes: %d, non mate probes: %d' % (score_mat_m.shape[0], score_mat_nm.shape[0]))
 
     # Find the thresholds for different FARs
-    max_score_nm = np.max(score_mat_nm, axis=1)
-    label_temp = np.zeros(max_score_nm.shape, dtype=np.bool)
+    if score_mat_nm.shape[0] > 0:
+        max_score_nm = np.max(score_mat_nm, axis=1)
+    else:
+        max_score_nm = np.array([], dtype=score_mat.dtype)
+
     if len(FARs) == 1 and FARs[0] >= 1.0:
-        # If only testing closed-set identification, use the minimum score as threshold
-        # in case there is no non-mate probes
-        thresholds = [np.min(score_mat) - 1e-10]
+        thresholds = [float(torch.from_numpy(score_mat).min().item()) - 1e-10]
         openset = False
     else:
-        # If there is open-set identification, find the thresholds by FARs.
+        label_temp = np.zeros(max_score_nm.shape, dtype=np.bool_)
         assert score_mat_nm.shape[0] > 0, "For open-set identification (FAR<1.0), there should be at least one non-mate probe!"
         thresholds = find_thresholds_by_FAR(max_score_nm, label_temp, FARs=FARs)
         openset = True
 
-    # Sort the labels row by row according to scores
-    sort_idx_mat_m = np.argsort(score_mat_m, axis=1)
-    sorted_label_mat_m = np.ndarray(label_mat_m.shape, dtype=np.bool)
-    for row in range(label_mat_m.shape[0]):
-        sort_idx = (sort_idx_mat_m[row, :])[::-1]
-        sorted_label_mat_m[row,:] = label_mat_m[row, sort_idx]
+    # Sort the labels row by row according to scores (use torch to avoid numpy OpenMP deadlock)
+    score_mat_m_t = torch.from_numpy(score_mat_m)
+    sort_idx_mat_m = torch.argsort(score_mat_m_t, dim=1, descending=True)
+    del score_mat_m_t
+
+    label_mat_m_t = torch.from_numpy(label_mat_m.astype(np.bool_)).long()
+    sorted_label_mat_m = torch.gather(label_mat_m_t, 1, sort_idx_mat_m).numpy().astype(np.bool_)
+    del label_mat_m_t, sort_idx_mat_m
         
     # Calculate DIRs for different FARs and ranks
     if openset:

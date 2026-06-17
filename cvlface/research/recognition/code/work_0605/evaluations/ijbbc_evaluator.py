@@ -55,6 +55,7 @@ class IJBBCEvaluator(BaseEvaluator):
             self.log(result, epoch, step, n_images_seen)
         else:
             result = {}
+        self.fabric.barrier()
         return result
 
     def extract(self, pipeline, flip_images=False):
