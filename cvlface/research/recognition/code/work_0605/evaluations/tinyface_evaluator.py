@@ -57,6 +57,7 @@ class TinyFaceEvaluator(BaseEvaluator):
             self.log(result, epoch, step, n_images_seen)
         else:
             result = {}
+        self.fabric.barrier()
         return result
 
     def extract(self, pipeline, flip_images=False):
@@ -94,9 +95,12 @@ class TinyFaceEvaluator(BaseEvaluator):
 
     def compute_metric(self, collection, collection_flip):
         if self.is_debug_run():
-            print('Debug run, skipping metric computation')
             ranks = [1, 5, 20]
             return {k: 0.0 for k in ['rank-{}'.format(r) for r in ranks]}
+
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
 
         embeddings = (collection['features'] + collection_flip['features']).numpy()
         result = evaluate(
@@ -104,5 +108,6 @@ class TinyFaceEvaluator(BaseEvaluator):
             image_paths=collection['image_paths'],
             meta=self.meta,
         )
+
         return result
 

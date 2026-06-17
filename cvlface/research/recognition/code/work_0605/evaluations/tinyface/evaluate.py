@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import torch
 from .metrics import DIR_FAR
 
 
@@ -52,20 +53,19 @@ class TinyFaceTest:
 
         feat_probe = features[self.indices_probe]
         feat_gallery = features[self.indices_gallery]
-        compare_func = inner_product
-        score_mat = compare_func(feat_probe, feat_gallery)
 
+        score_mat = inner_product_torch(feat_probe, feat_gallery)
         label_mat = self.labels_probe[:, None] == self.labels_gallery[None, :]
-
         results, _, __ = DIR_FAR(score_mat, label_mat, ranks)
 
         return results
 
 
-def inner_product(x1, x2):
-
-    # normalize
-    x1 = x1 / np.linalg.norm(x1, axis=1, keepdims=True)
-    x2 = x2 / np.linalg.norm(x2, axis=1, keepdims=True)
-
-    return np.dot(x1, x2.T)
+def inner_product_torch(x1, x2):
+    """Use torch CPU ops to avoid numpy OpenMP thread pool deadlock."""
+    t1 = torch.from_numpy(x1).float()
+    t2 = torch.from_numpy(x2).float()
+    t1 = t1 / t1.norm(dim=1, keepdim=True)
+    t2 = t2 / t2.norm(dim=1, keepdim=True)
+    score = torch.mm(t1, t2.T)
+    return score.numpy()

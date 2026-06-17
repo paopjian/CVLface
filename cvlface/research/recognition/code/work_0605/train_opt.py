@@ -366,7 +366,7 @@ if __name__ == '__main__':
     # 基于改进幅度的早停监控器
     improvement_monitors = [
         # work/tpir_at_far_1e-10: 10个epoch没有提升1%则早停 (mode='max', 越大越好)
-        MetricImprovementMonitor(metric_name='work_0230_3t/tpir_at_far_1e-10', patience=10, min_improvement=0.005, mode='max', relative=True),
+        MetricImprovementMonitor(metric_name='work_0605_3t/tpir_at_far_1e-10', patience=10, min_improvement=0.005, mode='max', relative=True),
     ]
     # train/mean_loss: 5个epoch没有降低0.1则早停 (mode='min', 绝对值)
     loss_improvement_monitor = MetricImprovementMonitor(metric_name='train/mean_loss', patience=10, min_improvement=0.1, mode='min', relative=False)
@@ -499,7 +499,8 @@ if __name__ == '__main__':
                     result = evaluator.evaluate(eval_pipeline, epoch=epoch, step=step, n_images_seen=n_images_seen)
                     all_result.update({evaluator.name + "/" + k: v for k, v in result.items()})
             eval_time = (time.time() - eval_start_time) / 60
-            print(f'Evaluation Time: {eval_time:.2f} mins')
+            if fabric.local_rank == 0:
+                print(f'Evaluation Time: {eval_time:.2f} mins')
             
             
             # Combined evaluations (合并多源评估)
@@ -565,6 +566,7 @@ if __name__ == '__main__':
                 break
 
             # save model
+            
             train_pipeline.save(fabric, train_pipeline, cfg, epoch, step, n_images_seen,
                                 is_best=is_best_tracker.is_best())
             print('Evaluation Finished and Model Saved')
@@ -640,4 +642,7 @@ if __name__ == '__main__':
         _mlflow_queue.put(None)
         _mlflow_thread.join(timeout=30)
         mlflow.end_run()
+        for logger in fabric.loggers:
+            if hasattr(logger, 'experiment') and hasattr(logger.experiment, 'finish'):
+                logger.experiment.finish()
     print('done')

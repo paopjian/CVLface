@@ -152,6 +152,7 @@ class CustomIJBCEvaluator(BaseEvaluator):
             self.log(result, epoch, step, n_images_seen)
         else:
             result = {}
+        self.fabric.barrier()
         return result
 
 
@@ -159,8 +160,8 @@ class CustomIJBCEvaluator(BaseEvaluator):
         all_features = []
         all_index = []
         for batch_idx, batch in tqdm(
-            enumerate(self.dataloader), 
-            total=len(self.dataloader), 
+            enumerate(self.dataloader),
+            total=len(self.dataloader),
             desc=f'Custom IJBC Feature Extraction',
             disable=self.fabric.local_rank != 0
         ):

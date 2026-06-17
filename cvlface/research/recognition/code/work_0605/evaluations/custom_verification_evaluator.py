@@ -815,7 +815,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                     query_feats_list=embeddings,
                     query_ids=query_ids,
                     num_gpus=7,
-                    block_size=2048*2,
+                    block_size=2048*4,
                     show_progress=True,
                 )
 
@@ -906,7 +906,10 @@ class CustomVerificationEvaluator(BaseEvaluator):
         # result = {'acc': acc, 'std': std}
         if embeddings is not None:
             del embeddings
-            torch.cuda.empty_cache()
+        # 必须 gc.collect 释放 ThreadPoolExecutor worker 在 GPU 1-6 上残留的张量
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return result
 
