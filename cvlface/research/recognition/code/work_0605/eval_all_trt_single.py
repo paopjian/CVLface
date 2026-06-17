@@ -40,7 +40,7 @@ from evaluations.custom_verification_evaluator import (
     IndexedDataset,
 )
 from evaluations.verifications.verification import calculate_roc2
-from evaluations.cluster_utils import get_sim_matrix_large_scale_v4
+from evaluations.cluster_utils import get_sim_matrix_large_scale_v5
 from evaluations.ijbbc.evaluate import evaluate as ijbbc_evaluate
 from evaluations.tinyface.evaluate import evaluate as tinyface_evaluate
 from evaluations.custom_ijbbc_evaluator import get_pairs_data, compute_tpir_from_heap
@@ -570,12 +570,14 @@ def gather_and_deduplicate(shm_path, world_size):
 def compute_metric_type4(embeddings, query_ids, num_gpus):
     """type=4: large scale matrix + TPIR"""
     target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
-    pos_hist, neg_hist = get_sim_matrix_large_scale_v4(
+    pos_hist, neg_hist = get_sim_matrix_large_scale_v5(
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
-        block_size=2048 * 2,
+        block_size=2048 * 10,
         show_progress=True,
+        hist_bins=2000,
+        precision='fp16'
     )
     result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, target_fars=target_fars)
     print('result:', result)
