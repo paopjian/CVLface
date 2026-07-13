@@ -1,5 +1,7 @@
 from ..base import BaseClassifier
 from .partial_fc import PartialFC_V2
+from .partial_fc_qcface import QCFacePartialFC
+from losses.qcface import QCFaceLoss
 
 
 class PartialFCClassifier(BaseClassifier):
@@ -15,14 +17,26 @@ class PartialFCClassifier(BaseClassifier):
     @classmethod
     def from_config(cls, classifier_cfg, margin_loss_fn, model_cfg, num_classes, rank, world_size):
         if classifier_cfg.name == 'partial_fc':
-            classifier = PartialFC_V2(
-                rank=rank,
-                world_size=world_size,
-                margin_loss=margin_loss_fn,
-                embedding_size=model_cfg.output_dim,
-                num_classes=num_classes,
-                sample_rate=classifier_cfg.sample_rate,
-            )
+            # Dispatch to QCFacePartialFC when using QCFace loss, else standard PartialFC_V2.
+            if isinstance(margin_loss_fn, QCFaceLoss):
+                classifier = QCFacePartialFC(
+                    rank=rank,
+                    world_size=world_size,
+                    margin_loss=margin_loss_fn,
+                    embedding_size=model_cfg.output_dim,
+                    num_classes=num_classes,
+                    sample_rate=classifier_cfg.sample_rate,
+                    warmup_id_only_epochs=margin_loss_fn.warmup_id_only_epochs,
+                )
+            else:
+                classifier = PartialFC_V2(
+                    rank=rank,
+                    world_size=world_size,
+                    margin_loss=margin_loss_fn,
+                    embedding_size=model_cfg.output_dim,
+                    num_classes=num_classes,
+                    sample_rate=classifier_cfg.sample_rate,
+                )
         else:
             raise NotImplementedError
 

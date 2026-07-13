@@ -86,23 +86,35 @@ def compute_update_ratio(module, param_cache):
         return 0.0
 
 def log_classifier(classifier, log_dict):
-    if classifier is not None and hasattr(classifier, 'partial_fc') and hasattr(classifier.partial_fc, 'batch_mean') and hasattr(classifier.partial_fc, 'batch_std'): 
+    if classifier is not None and hasattr(classifier, 'partial_fc') and hasattr(classifier.partial_fc, 'batch_mean') and hasattr(classifier.partial_fc, 'batch_std'):
         try:
             mean_t = classifier.partial_fc.batch_mean.detach().float()
             std_t = classifier.partial_fc.batch_std.detach().float()
-            
+
             # 确保张量是标量
             if mean_t.numel() > 1:
                 mean_t = mean_t.mean()
             if std_t.numel() > 1:
                 std_t = std_t.mean()
-                
+
             # 直接记录全局的batch_mean和batch_std
             log_dict['train/adaface_batch_mean'] = float(mean_t.item())
             log_dict['train/adaface_batch_std'] = float(std_t.item())
-            
+
         except Exception as e:
             print(f"Error occurred while processing classifier statistics: {e}")
+
+    # QCFace: 记录 ID loss / 幅度正则 loss / 平均 norm (仅在使用 QCFacePartialFC 时存在)
+    if classifier is not None and hasattr(classifier, 'partial_fc') and hasattr(classifier.partial_fc, '_last_loss_g'):
+        try:
+            pfc = classifier.partial_fc
+            def _scalar(v):
+                return float(v.item()) if isinstance(v, torch.Tensor) else float(v)
+            log_dict['train/qcface_loss_id'] = _scalar(pfc._last_loss_id)
+            log_dict['train/qcface_loss_g'] = _scalar(pfc._last_loss_g)
+            log_dict['train/qcface_mean_norm'] = _scalar(pfc._last_mean_norm)
+        except Exception as e:
+            print(f"Error occurred while processing QCFace statistics: {e}")
     return log_dict
 
 # 添加用于早停的类
@@ -380,7 +392,14 @@ if __name__ == '__main__':
         epoch_loss_count = 0
         
         train_pipeline.train()
-        
+
+        # Notify QCFacePartialFC of the current epoch so it can switch norm
+        # loss on after the ID-only warmup period.
+        if (classifier is not None
+                and hasattr(classifier, 'partial_fc')
+                and hasattr(classifier.partial_fc, 'set_epoch')):
+            classifier.partial_fc.set_epoch(epoch)
+
         set_epoch(dataloader, epoch, cfg)
         batch_length = len(dataloader) if cfg.trainers.limit_num_batch <= 0 else cfg.trainers.limit_num_batch
         pbar = tqdm(total=batch_length, disable=fabric.local_rank != 0)
@@ -476,7 +495,7 @@ if __name__ == '__main__':
         
         # 每个epoch保存模型
         fabric.barrier()
-        save_dir = os.path.join(cfg.dataset.model_save_dir, os.path.basename(cfg.trainers.output_dir), 'checkpoints_every_epoch', f'epoch:{epoch}_step:{step}')
+        save_dir = os.path.join(cfg.dataset.model_save_dir, os.path.basename(cfg.trainers.output_dir), 'checkpoints_every_epoch', f'epoch:{epoch}')
         train_pipeline.save_pipelines_and_configs(save_dir, fabric, train_pipeline, cfg, epoch, step, n_images_seen)
         fabric.barrier()
 
@@ -587,7 +606,9 @@ if __name__ == '__main__':
         print('Final Evaluation Started')
 
         # evaluation callbacks
-        cfg.evaluations = config.load_yaml('final', directory='evaluations')
+        # 最终评估使用的 config 可通过环境变量 FINAL_EVAL_CONFIG 指定 (默认 'final')
+        final_eval_config = os.environ.get('FINAL_EVAL_CONFIG', 'final')
+        cfg.evaluations = config.load_yaml(final_eval_config, directory='evaluations')
         evaluators = []
         for name, info in cfg.evaluations.per_epoch_evaluations.items():
             eval_data_path = os.path.join(cfg.evaluations.data_root, info.path)

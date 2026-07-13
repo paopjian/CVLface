@@ -1,0 +1,25 @@
+margin_loss_name: 'qcface'
+
+# Logit scaling factor
+scale: 64.0
+
+# ArcFace-style angular margin (radians)
+m: 0.5
+
+# Norm bounds: recognised norms must fall between la and ua
+ua: 100.0
+la: 1.0
+
+# Weight for magnitude-regularisation term in the total loss
+# total_loss = CE(id_loss) + lambda_g * norm_loss
+lambda_g: 1.0
+
+# Same as AdaFace / ArcFace: set > 0 to enable inter-class filtering
+interclass_filtering_threshold: 0
+
+# Warm-up epochs during which norm loss (loss_g) is disabled.
+# The classifier is randomly initialised, so easy_probs ≈ 0 early on and the
+# norm loss would push all norms toward la=1, destroying pretrained features.
+# After this many epochs the classifier has converged enough that easy_probs
+# are meaningful and norm loss can safely be switched on.
+warmup_id_only_epochs: 5
