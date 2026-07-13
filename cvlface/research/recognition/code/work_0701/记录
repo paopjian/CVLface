@@ -1,0 +1,247 @@
+models.start_from 加载与预训练模型参数
+evaluations 使用 val+cplfw+calfw
+pipelines.resume 保存所有模型的参数, 从这里可以加载模型继续训练
+
+
+1. 用train训练分类器
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train.py \
+  trainers.prefix=ft_ir101_s1_cls_warmup \
+  trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml models.freeze=True \
+  models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/basic_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+  losses=configs/adaface.yaml \
+  pefts=configs/freeze.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.008 optims.num_epoch=5 optims.lr_milestones=[2,4] \
+  optims.momentum=0.9 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output
+
+2. 使用训练好的分类器 训练部分层级 加入预热等参数 s2训练时锁分类器
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s2_partfreeze_b36 \
+  trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml models.freeze=True \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s1_cls_warmup_03-21_0/checkpoints_every_epoch/epoch:4_step:87980/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 classifiers.freeze=True \
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s1_cls_warmup_03-21_0/checkpoints_every_epoch/epoch:4_step:87980 \
+  losses=configs/adaface.yaml \
+  pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.008 optims.num_epoch=20 \
+  optims.warmup_epoch=2 \
+  optims.momentum=0.9 optims.weight_decay=0.0005 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output
+一轮58min
+评估全部模型结果
+python eval_all_2_launcher.py --eval_config_name test_20260320 --ckpt_dir /data2/dataset_0320_rec/train_output/ft_ir101_s2_partfreeze_b36_03-21_0/checkpoints_every_epoch --project_name work_0320_eval --name s2_0322
+一轮46min
+
+3. 训练分类器
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s3_cls_warmup \
+  trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml models.freeze=True \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s2_partfreeze_b36_03-21_0/checkpoints_every_epoch/epoch:17_step:158364/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 classifiers.freeze=False \
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s2_partfreeze_b36_03-21_0/checkpoints_every_epoch/epoch:17_step:158364 \
+  losses=configs/adaface.yaml \
+  pefts=configs/freeze.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.005 optims.num_epoch=4 \
+  optims.warmup_epoch=1 \
+  optims.momentum=0.9 optims.weight_decay=0.0005 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output
+一轮40min
+
+4. 模型全解冻, 分类器冻结
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s3_full \
+  trainers.num_gpu=8 trainers.batch_size=192 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 classifiers.freeze=True\
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192 \
+  losses=configs/adaface.yaml \
+  pefts=configs/full.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.0008 optims.num_epoch=10 \
+  optims.warmup_epoch=2 \
+  optims.momentum=0.95 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output
+一轮130min
+评估:
+python eval_all_2_launcher.py --eval_config_name test_20260320 --ckpt_dir /data2/dataset_0320_rec/train_output/ft_ir101_s3_full_03-23_0/checkpoints_every_epoch --project_name work_0320_eval --name s3_0323
+
+评估 0925和1226
+python eval_one_folder.py \
+  --eval_config_name test_20260320 \
+  --ckpt_dir /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/s3_0925 \
+  --project_name work_0320_eval \
+  --name s3_0925
+
+python eval_one_folder.py \
+  --eval_config_name test_20260320 \
+  --ckpt_dir /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/s3_1226_14 \
+  --project_name work_0320_eval \
+  --name s3_1226
+
+评估 webface_12m
+python eval_one_folder.py \
+  --eval_config_name test_20260320 \
+  --ckpt_dir /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m \
+  --project_name work_0320_eval \
+  --name webface12m
+python eval_one_folder.py \
+  --eval_config_name val_20260320 \
+  --ckpt_dir /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m \
+  --project_name work_0320 \
+  --name webface12m
+
+# 继续训练10epoch
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s3_full_0323_continue \
+  trainers.num_gpu=8 trainers.batch_size=192 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_full_03-23_0/checkpoints_every_epoch/epoch:9_step:234620/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 classifiers.freeze=True\
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_full_03-23_0/checkpoints_every_epoch/epoch:9_step:234620 \
+  losses=configs/adaface.yaml \
+  pefts=configs/full.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.0008 optims.num_epoch=10 \
+  optims.warmup_epoch=2 \
+  optims.momentum=0.95 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output
+[train/mean_loss] 无足够改进: 当前=3.2400, 最佳=3.2510 (5/5)
+[train/mean_loss] 早停触发: 连续5个epoch无足够改进
+
+# 全解冻训练
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s3_full \
+  trainers.num_gpu=8 trainers.batch_size=192 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192 \
+  losses=configs/adaface.yaml \
+  pefts=configs/full.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.0008 optims.num_epoch=20 \
+  optims.warmup_epoch=2 \
+  optims.momentum=0.95 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output
+[train/mean_loss] 无足够改进: 当前=2.7463, 最佳=2.8035 (1/10)
+EarlyStoppingMonitor: metric=75.5390, best_metric=76.2001, no_improvement_count=10/10
+Early stopping triggered after 10 epochs without improvement.
+
+# h=-0.333
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s3_full \
+  trainers.num_gpu=8 trainers.batch_size=192 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 classifiers.freeze=True\
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192 \
+  losses=configs/adaface.yaml losses.h=-0.333\
+  pefts=configs/full.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.0008 optims.num_epoch=10 \
+  optims.warmup_epoch=2 \
+  optims.momentum=0.95 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output 
+
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train5.py \
+  trainers.prefix=ft_ir101_s3_full \
+  trainers.num_gpu=8 trainers.batch_size=192 trainers.num_workers=8 \
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml \
+  models.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/gridsample_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 classifiers.freeze=True\
+  classifiers.start_from=/data2/dataset_0320_rec/train_output/ft_ir101_s3_cls_warmup_03-23_0/checkpoints_every_epoch/epoch:3_step:35192 \
+  losses=configs/adaface.yaml losses.h=-0.333\
+  pefts=configs/full.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.0008 optims.num_epoch=10 \
+  optims.warmup_epoch=2 \
+  optims.momentum=0.95 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+  optims.scheduler='cosine' \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output \
+  pipelines.resume=/data2/dataset_0320_rec/train_output/ft_ir101_s3_full_03-30_0/checkpoints_every_epoch/epoch:6_step:164234
