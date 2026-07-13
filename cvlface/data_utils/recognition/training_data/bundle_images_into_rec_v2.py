@@ -82,7 +82,7 @@ def scan_dataset(source_dir):
 
     elapsed = time.time() - t0
     print(f'Found {len(file_list):,} images, {num_classes:,} classes in {elapsed:.1f}s')
-    return file_list, label_list, num_classes
+    return file_list, label_list, num_classes, label_names
 
 
 def ensure_jpeg(img_bytes):
@@ -97,26 +97,33 @@ def ensure_jpeg(img_bytes):
 
 def reader_worker(file_list, label_list, start, end, out_queue):
     """读线程: 顺序读取 [start, end) 的文件, 放入队列"""
-    for i in range(start, end):
-        with open(file_list[i], 'rb') as f:
-            img_bytes = f.read()
-        if img_bytes[:3] != JPEG_MAGIC:
-            img_bytes = ensure_jpeg(img_bytes)
-        out_queue.put((i, label_list[i], img_bytes))
-    out_queue.put(None)  # sentinel
+    try:
+        for i in range(start, end):
+            try:
+                with open(file_list[i], 'rb') as f:
+                    img_bytes = f.read()
+                if img_bytes[:3] != JPEG_MAGIC:
+                    img_bytes = ensure_jpeg(img_bytes)
+                out_queue.put((i, label_list[i], img_bytes))
+            except Exception:
+                # 跳过无法读取/解码的图片
+                pass
+    finally:
+        out_queue.put(None)  # sentinel 必须发出，否则主线程死锁
 
 
-def bundle_recordio(file_list, label_list, num_classes, save_dir):
+def bundle_recordio(file_list, label_list, num_classes, save_dir, label_names=None):
     os.makedirs(save_dir, exist_ok=True)
     rec_path = os.path.join(save_dir, 'train.rec')
     idx_path = os.path.join(save_dir, 'train.idx')
     tsv_path = os.path.join(save_dir, 'train.tsv')
+    orig_path = os.path.join(save_dir, 'original_structure.txt')
     N = len(file_list)
     print(f'\n[RecordIO] Writing to {rec_path}')
     print(f'  {N:,} images, {num_classes:,} classes, {NUM_READERS} reader threads')
 
     # 删除已有文件
-    for p in [rec_path, idx_path, tsv_path]:
+    for p in [rec_path, idx_path, tsv_path, orig_path]:
         if os.path.isfile(p):
             os.remove(p)
 
@@ -124,6 +131,7 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
     rec_file = open(rec_path, 'wb', buffering=8*1024*1024)
     idx_file = open(idx_path, 'w', buffering=1*1024*1024)
     tsv_file = open(tsv_path, 'w', buffering=1*1024*1024)
+    orig_file = open(orig_path, 'w', buffering=1*1024*1024)
 
     def write_record(idx, data):
         offset = rec_file.tell()
@@ -152,7 +160,14 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
         t.start()
 
     # 按段顺序消费
-    pbar = tqdm(total=N, desc='Writing RecordIO')
+    # 尝试输出到真实终端，失败则静默禁用
+    try:
+        tty = open('/dev/tty', 'w')
+        pbar = tqdm(total=N, desc='Writing RecordIO', ncols=80, file=tty)
+    except (OSError, IOError):
+        # 没有终端（非交互环境），禁用进度条
+        pbar = tqdm(total=N, desc='Writing RecordIO', disable=True)
+
     for q in queues:
         while True:
             item = q.get()
@@ -165,6 +180,8 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
             # tsv: image_index \t label/filename \t label
             filename = os.path.basename(file_list[i])
             tsv_file.write(f'{i}\t{label}/{filename}\t{label}\n')
+            # original_structure: image_index \t original_path
+            orig_file.write(f'{i}\t{file_list[i]}\n')
             pbar.update(1)
     pbar.close()
 
@@ -173,6 +190,7 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
     idx_file.close()
     rec_file.close()
     tsv_file.close()
+    orig_file.close()
 
     # Save metadata
     meta = {'num_classes': num_classes, 'num_samples': N}
@@ -184,6 +202,7 @@ def bundle_recordio(file_list, label_list, num_classes, save_dir):
     print(f'[RecordIO] Done: {elapsed:.1f}s ({elapsed/60:.1f} min), size: {size_gb:.1f} GB')
     print(f'  速度: {N/elapsed:.0f} images/s')
     print(f'[TSV] {tsv_path} ({N:,} entries)')
+    print(f'[Original Structure] {orig_path} ({N:,} entries)')
 
 
 if __name__ == '__main__':
@@ -206,8 +225,8 @@ if __name__ == '__main__':
     else:
         save_dir = args.save_dir
 
-    file_list, label_list, num_classes = scan_dataset(source_dir)
-    bundle_recordio(file_list, label_list, num_classes, save_dir)
+    file_list, label_list, num_classes, label_names = scan_dataset(source_dir)
+    bundle_recordio(file_list, label_list, num_classes, save_dir, label_names)
 
     # remove source image dirs
     if args.remove_images:
