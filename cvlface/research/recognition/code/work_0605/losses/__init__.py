@@ -1,5 +1,6 @@
 from .margin_loss import CombinedMarginLoss
 from .adaface import AdaFaceLoss
+from .qcface import QCFaceLoss
 
 def get_margin_loss(loss_config):
     if loss_config.margin_loss_name == 'margin':
@@ -17,6 +18,16 @@ def get_margin_loss(loss_config):
             h=loss_config.h,
             t_alpha=loss_config.t_alpha,
             interclass_filtering_threshold=loss_config.interclass_filtering_threshold
+        )
+    elif loss_config.margin_loss_name == 'qcface':
+        margin_loss = QCFaceLoss(
+            scale=loss_config.scale,
+            m=loss_config.m,
+            ua=loss_config.ua,
+            la=loss_config.la,
+            lambda_g=loss_config.lambda_g,
+            interclass_filtering_threshold=loss_config.interclass_filtering_threshold,
+            warmup_id_only_epochs=getattr(loss_config, 'warmup_id_only_epochs', 0),
         )
     elif loss_config.margin_loss_name == 'none':
         margin_loss = None

@@ -47,6 +47,13 @@ def apply_peft_to_model(peft_config, model):
             target_modules_mapping[f'blocks.{k}_feature_keypoint_linear'] = [f'blocks.{i}' for i in range(k, 24)] + ['feature'] + ['keypoint_linear']
         for k in range(49):
             target_modules_mapping[f'body.{k}'] = [f'body.{i}' for i in range(k, 49)] + ['output_layer']
+        # QCFace iresnet (models/iresnet_qcface): net.layer1..layer4 + net.bn2/fc/features.
+        # 这些 target 字符串与 block 内的 bnX 不冲突 (前缀 'net.layerX' vs 'net.bn2' 不连续)。
+        _qcface_tail = ['net.bn2', 'net.fc', 'net.features']
+        target_modules_mapping['qcface_tail'] = list(_qcface_tail)                                   # 仅输出头
+        target_modules_mapping['qcface_layer4'] = ['net.layer4'] + _qcface_tail                      # layer4 + 头
+        target_modules_mapping['qcface_layer3'] = ['net.layer3', 'net.layer4'] + _qcface_tail        # layer3-4 + 头
+        target_modules_mapping['qcface_layer2'] = ['net.layer2', 'net.layer3', 'net.layer4'] + _qcface_tail
         target_modules = target_modules_mapping[peft_config.target_modules]
 
         for key, param in model.named_parameters():

@@ -14,6 +14,10 @@ def get_model(model_config, task=''):
         from .vit_kprpe import load_model as load_vit_kprpe_model
         model = load_vit_kprpe_model(model_config)
         print('Loaded ViT model with KPRPE')
+    elif '/iresnet_qcface/' in model_config.yaml_path:
+        from .iresnet_qcface import load_model as load_iresnet_qcface_model
+        model = load_iresnet_qcface_model(model_config)
+        print('Loaded QCFace iResNet model')
     elif '/iresnet/' in model_config.yaml_path:
         from .iresnet import load_model as load_iresnet_model
         model = load_iresnet_model(model_config)

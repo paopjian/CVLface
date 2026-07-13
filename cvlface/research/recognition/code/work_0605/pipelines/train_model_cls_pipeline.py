@@ -49,15 +49,16 @@ class TrainModelClsPipeline(BasePipeline):
 
 
     def train(self):
-        if not self.model.config.freeze:
-            self.model.train()
-        else:
-            self.model.eval()
-            # 只对解冻范围内的 BN 恢复 train mode，让其 running_stats 适应新数据
-            for name, m in self.model.named_modules():
-                if isinstance(m, (torch.nn.BatchNorm2d, torch.nn.BatchNorm1d)):
-                    if hasattr(m, 'weight') and m.weight is not None and m.weight.requires_grad:
-                        m.train()
+        # 先将整个 model 置为 eval，防止冻结层的 BN running stats 被污染。
+        # peft(freeze/part_freeze)通过 requires_grad=False 冻结参数，但不改
+        # model.config.freeze，因此不能依赖 config.freeze 来决定 train/eval 模式。
+        self.model.eval()
+        # 再只对 requires_grad=True 的 BN 层恢复 train mode，让其 running_stats
+        # 随新数据更新（全量训练时所有 BN 都会恢复，部分冻结时只有解冻层恢复）。
+        for name, m in self.model.named_modules():
+            if isinstance(m, (torch.nn.BatchNorm2d, torch.nn.BatchNorm1d)):
+                if hasattr(m, 'weight') and m.weight is not None and m.weight.requires_grad:
+                    m.train()
         if not self.classifier.config.freeze:
             self.classifier.train()
 
