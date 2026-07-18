@@ -1,0 +1,15 @@
+num_epoch: 12
+optimizer: 'sgd'
+lr: 0.2
+classifier_lr: 0.05
+momentum: 0.9
+weight_decay: 0.0005
+classifier_weight_decay: 0.0005
+scheduler: 'step'
+filter_bias_and_bn: true
+warmup_epoch: 1
+classifier_lr_warmup_epoch: 1
+lr_milestones: [6, 9]
+lr_lambda: 0.1
+max_grad_norm: 5.0
+classifier_max_grad_norm: 5.0

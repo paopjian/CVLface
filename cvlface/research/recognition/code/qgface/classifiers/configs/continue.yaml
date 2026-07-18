@@ -1,0 +1,4 @@
+name: 'partial_fc'
+sample_rate: 0.4
+freeze: False
+start_from: '/root/zhaokj/CVLface/cvlface/research/recognition/experiments/work_0724/ir101_adaface_07-24_1/checkpoints_every_epoch/epoch:10_step:144056'
