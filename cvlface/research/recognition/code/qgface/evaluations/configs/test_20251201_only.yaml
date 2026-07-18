@@ -1,0 +1,12 @@
+data_root: '/data2/dataset_1201_rec'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "work": {
+    'path': 'test',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 512,
+    'num_workers': 4
+  }
+}
+
