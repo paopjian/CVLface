@@ -221,7 +221,7 @@ class CustomIJBCEvaluator(BaseEvaluator):
         
         # 1. 全量计算
         start = time.time()
-        target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 5e-7, 1e-6, 1e-5]
+        target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 5e-7, 1e-6, 1e-5, 1e-4, 1e-3]
         
         N = len(query_ids)
         total_pairs = N * (N - 1) // 2
@@ -344,4 +344,6 @@ dummy_result = {
     '001_tpir_at_far_5e-07': 0.0,
     '001_tpir_at_far_1e-06': 0.0,
     '001_tpir_at_far_1e-05': 0.0,
+    '001_tpir_at_far_1e-04': 0.0,
+    '001_tpir_at_far_1e-03': 0.0,
 }

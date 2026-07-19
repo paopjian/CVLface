@@ -61,7 +61,7 @@ def _collate_fn(examples):
 
 
 class TRTInfer:
-    """TRT FP16 推理器"""
+    """TRT 推理器 (精度由 engine 自身决定: fp16 或 fp32)"""
     def __init__(self, engine_path, batch_size=256):
         import tensorrt as trt
         self.batch_size = batch_size
@@ -80,8 +80,12 @@ class TRTInfer:
             else:
                 self.output_name = n
         assert self.input_name and self.output_name, 'IO tensor 识别失败'
-        self.d_input = torch.zeros(batch_size, 3, 112, 112, dtype=torch.float16, device='cuda')
-        self.d_output = torch.zeros(batch_size, 512, dtype=torch.float16, device='cuda')
+        # 按 engine 实际 dtype 分配 buffer (fp16 engine -> half, fp32 engine -> float)
+        _trt2torch = {trt.float16: torch.float16, trt.float32: torch.float32}
+        self.input_dtype = _trt2torch[self.engine.get_tensor_dtype(self.input_name)]
+        self.output_dtype = _trt2torch[self.engine.get_tensor_dtype(self.output_name)]
+        self.d_input = torch.zeros(batch_size, 3, 112, 112, dtype=self.input_dtype, device='cuda')
+        self.d_output = torch.zeros(batch_size, 512, dtype=self.output_dtype, device='cuda')
         self.context.set_tensor_address(self.input_name, self.d_input.data_ptr())
         self.context.set_tensor_address(self.output_name, self.d_output.data_ptr())
         # 用当前 stream, 保证 copy_ 与 execute 顺序一致 (避免跨 stream 竞态)
@@ -89,9 +93,9 @@ class TRTInfer:
 
     def __call__(self, x):
         total = x.shape[0]
-        x_fp16 = x.half()
+        x_in = x.to(self.input_dtype)
         if total <= self.batch_size:
-            self.d_input[:total].copy_(x_fp16)
+            self.d_input[:total].copy_(x_in)
             self.context.execute_async_v3(self.stream.cuda_stream)
             self.stream.synchronize()
             return self.d_output[:total].float()
@@ -99,25 +103,34 @@ class TRTInfer:
         for s in range(0, total, self.batch_size):
             e = min(s + self.batch_size, total)
             bs = e - s
-            self.d_input[:bs].copy_(x_fp16[s:e])
+            self.d_input[:bs].copy_(x_in[s:e])
             self.context.execute_async_v3(self.stream.cuda_stream)
             self.stream.synchronize()
             results.append(self.d_output[:bs].float().clone())
         return torch.cat(results, dim=0)
 
 
-def build_trt_engine(model, batch_size, cache_dir):
-    """导出 ONNX → 构建 TRT FP16 engine"""
+def build_trt_engine(model, batch_size, cache_dir, precision='fp16'):
+    """导出 ONNX → 构建 TRT engine
+
+    precision:
+      'fp16' - 模型/ONNX 权重转 FP16 (默认, 速度快, 数值有 FP16 噪声)
+      'fp32' - 模型/ONNX 保持 FP32 (更接近 PyTorch 原始结果, 复现性更好, 更慢)
+    """
     import tensorrt as trt
+    if precision not in ('fp16', 'fp32'):
+        raise ValueError(f"precision 仅支持 'fp16'/'fp32', 收到: {precision}")
     os.makedirs(cache_dir, exist_ok=True)
     onnx_path = os.path.join(cache_dir, 'model.onnx')
     engine_path = os.path.join(cache_dir, 'model.engine')
 
-    model_fp16 = model.half().cuda()
-    model_fp16.eval()
-    dummy = torch.randn(batch_size, 3, 112, 112, device='cuda', dtype=torch.float16)
+    use_fp16 = (precision == 'fp16')
+    onnx_dtype = torch.float16 if use_fp16 else torch.float32
+    export_model = (model.half() if use_fp16 else model.float()).cuda()
+    export_model.eval()
+    dummy = torch.randn(batch_size, 3, 112, 112, device='cuda', dtype=onnx_dtype)
     with torch.no_grad():
-        torch.onnx.export(model_fp16, dummy, onnx_path,
+        torch.onnx.export(export_model, dummy, onnx_path,
                           input_names=['input'], output_names=['output'],
                           opset_version=17, dynamo=False)
 
@@ -367,7 +380,7 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
     query_ids = np.array([index_docid_list[idx] for idx in real_indices])
 
     # 全量计算
-    target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 5e-7, 1e-6, 1e-5]
+    target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 5e-7, 1e-6, 1e-5, 1e-4, 1e-3]
 
     N = len(query_ids)
     total_pairs = N * (N - 1) // 2
@@ -574,7 +587,7 @@ def compute_metric_type4(embeddings, query_ids, num_gpus):
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
-        block_size=2048 * 10,
+        block_size=2048 * 16,
         show_progress=True,
         hist_bins=2000,
         precision='fp16'
@@ -648,6 +661,9 @@ if __name__ == '__main__':
     parser.add_argument('--eval_config_name', type=str, default='test_20260605')
     parser.add_argument('--ckpt_path', type=str, required=True)
     parser.add_argument('--name', type=str, default='eval3')
+    parser.add_argument('--precision', type=str, default='fp16',
+                        choices=['fp16', 'fp32'],
+                        help="TRT engine 精度: fp16(默认, 快) / fp32(更稳, 更接近 PyTorch)")
     args = parser.parse_args()
 
     path = args.ckpt_path
@@ -665,9 +681,10 @@ if __name__ == '__main__':
     model.eval()
 
     trt_cache = '/tmp/trt_eval3_cache'
-    print("构建 TRT engine...")
+    print(f"构建 TRT engine (precision={args.precision})...")
     t0 = time.time()
-    engine_path = build_trt_engine(model, batch_size=BATCH_SIZE, cache_dir=trt_cache)
+    engine_path = build_trt_engine(model, batch_size=BATCH_SIZE, cache_dir=trt_cache,
+                                   precision=args.precision)
     if engine_path is None:
         print("TRT 构建失败")
         sys.exit(1)

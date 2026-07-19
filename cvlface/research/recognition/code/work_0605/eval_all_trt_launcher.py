@@ -78,6 +78,9 @@ if __name__ == '__main__':
     parser.add_argument('--ckpt_dir', type=str, required=True)
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--project_name', type=str, default="work_0605_test")
+    parser.add_argument('--precision', type=str, default='fp16',
+                        choices=['fp16', 'fp32'],
+                        help="TRT engine 精度: fp16(默认, 快) / fp32(更稳, 更接近 PyTorch)")
     parser.add_argument('--timeout_minutes', type=int, default=90)
     parser.add_argument('--max_retries', type=int, default=2)
     args = parser.parse_args()
@@ -129,6 +132,7 @@ if __name__ == '__main__':
             '--eval_config_name', args.eval_config_name,
             '--ckpt_path', path,
             '--name', args.name,
+            '--precision', args.precision,
         ]
 
         env = os.environ.copy()
