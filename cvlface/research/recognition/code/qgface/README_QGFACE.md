@@ -47,12 +47,12 @@ The 8-GPU `dataset_0605` command is also available as:
 bash scripts/examples/run_qgface_ir34_0605.sh
 ```
 
-Five IR-34/IR-101 and FC/PFC training variants are documented in
+Six IR-34/IR-101 and FC/PFC training variants are documented in
 [`QGFACE_TRAINING_VARIANTS.md`](QGFACE_TRAINING_VARIANTS.md) and share this
 entrypoint:
 
 ```bash
-bash scripts/examples/run_qgface_variants_0605.sh <1|2|3|4|5>
+bash scripts/examples/run_qgface_variants_0605.sh <1|2|3|4|5|6>
 ```
 
 `pipelines/configs/train_qgface_paper.yaml` sets queue size to the dataset's

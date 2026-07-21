@@ -2,8 +2,8 @@
 set -euo pipefail
 
 MODE="${1:-}"
-if [[ ! "${MODE}" =~ ^[1-5]$ ]]; then
-    echo "Usage: bash scripts/examples/run_qgface_variants_0605.sh <1|2|3|4|5>"
+if [[ ! "${MODE}" =~ ^[1-6]$ ]]; then
+    echo "Usage: bash scripts/examples/run_qgface_variants_0605.sh <1|2|3|4|5|6>"
     exit 2
 fi
 
@@ -17,7 +17,14 @@ export DECODE_BACKEND="${DECODE_BACKEND:-turbojpeg}"
 export DATA_ROOT="${DATA_ROOT:-/data1/dataset_0605}"
 export PYTHONUNBUFFERED=1
 
-BATCH_SIZE="${BATCH_SIZE:-64}"
+if [[ "${MODE}" == "6" ]]; then
+    if [[ -n "${BATCH_SIZE:-}" && "${BATCH_SIZE}" != "128" ]]; then
+        echo "Mode 6 forces per-GPU batch size to 128; ignoring BATCH_SIZE=${BATCH_SIZE}"
+    fi
+    BATCH_SIZE=128
+else
+    BATCH_SIZE="${BATCH_SIZE:-64}"
+fi
 NUM_WORKERS="${NUM_WORKERS:-8}"
 COMPILE_MODEL="${COMPILE_MODEL:-true}"
 EVALUATIONS_CONFIG="${EVALUATIONS_CONFIG:-configs/val_20260605.yaml}"
@@ -46,11 +53,15 @@ fi
 
 RUNTIME_OVERRIDES=()
 if [[ -n "${NUM_EPOCH:-}" ]]; then
-    if [[ "${MODE}" == "5" ]]; then
-        echo "NUM_EPOCH cannot override the fixed 5+12 epoch schedule of mode 5"
+    if [[ "${MODE}" == "5" || "${MODE}" == "6" ]]; then
+        echo "NUM_EPOCH cannot override the fixed multi-stage schedule of mode ${MODE}"
         exit 2
     fi
     RUNTIME_OVERRIDES+=("optims.num_epoch=${NUM_EPOCH}")
+fi
+if [[ "${MODE}" == "6" && ( -n "${LR:-}" || -n "${CLASSIFIER_LR:-}" ) ]]; then
+    echo "Mode 6 uses fixed per-stage learning rates; unset LR and CLASSIFIER_LR"
+    exit 2
 fi
 if [[ -n "${LR:-}" ]]; then
     RUNTIME_OVERRIDES+=("optims.lr=${LR}")
@@ -127,5 +138,63 @@ case "${MODE}" in
             classifiers=configs/pfc40_freeze.yaml \
             "classifiers.start_from=${STAGE1_CKPT}" \
             optims=configs/qgface_model_finetune_sgd.yaml
+        ;;
+    6)
+        STAGE6_CLASSIFIER_PREFIX="qgface_6_ir101_epoch11_classifier_realign"
+        if [[ -z "${STAGE6_CLASSIFIER_CKPT:-}" ]]; then
+            if [[ -z "${MODE5_EPOCH11_CKPT:-}" ]]; then
+                MODE5_RUN="$(find "${OUTPUT_ROOT}" -mindepth 1 -maxdepth 1 -type d \
+                    -name 'qgface_5_ir101_pretrained_model_train_*' -printf '%T@ %p\n' | \
+                    sort -nr | sed -n '1s/^[^ ]* //p')"
+                if [[ -z "${MODE5_RUN}" || ! -d "${MODE5_RUN}/checkpoints_every_epoch" ]]; then
+                    echo "Cannot locate mode-5 model run under ${OUTPUT_ROOT}"
+                    exit 1
+                fi
+                MODE5_EPOCH11_CKPT="$(find "${MODE5_RUN}/checkpoints_every_epoch" \
+                    -mindepth 1 -maxdepth 1 -type d -name 'epoch:11_step:*' -print -quit)"
+            fi
+
+            if [[ ! -f "${MODE5_EPOCH11_CKPT}/model.pt" || \
+                  ! -f "${MODE5_EPOCH11_CKPT}/classifier_rank0.pt" ]]; then
+                echo "Invalid mode-5 epoch-11 checkpoint: ${MODE5_EPOCH11_CKPT}"
+                exit 1
+            fi
+
+            run_qgface \
+                "trainers.prefix=${STAGE6_CLASSIFIER_PREFIX}" \
+                models=iresnet/configs/qgface_ir101_pretrained.yaml \
+                "models.start_from=${MODE5_EPOCH11_CKPT}/model.pt" \
+                models.freeze=true \
+                classifiers=configs/pfc40.yaml \
+                "classifiers.start_from=${MODE5_EPOCH11_CKPT}" \
+                pipelines.contrast_weight=0.0 \
+                optims=configs/qgface_classifier_realign_sgd.yaml
+
+            STAGE6_CLASSIFIER_RUN="$(find "${OUTPUT_ROOT}" -mindepth 1 -maxdepth 1 -type d \
+                -name "${STAGE6_CLASSIFIER_PREFIX}_*" -printf '%T@ %p\n' | sort -nr | \
+                sed -n '1s/^[^ ]* //p')"
+            if [[ -z "${STAGE6_CLASSIFIER_RUN}" || \
+                  ! -d "${STAGE6_CLASSIFIER_RUN}/checkpoints_every_epoch" ]]; then
+                echo "Cannot locate mode-6 classifier run under ${OUTPUT_ROOT}"
+                exit 1
+            fi
+            STAGE6_CLASSIFIER_CKPT="$(find "${STAGE6_CLASSIFIER_RUN}/checkpoints_every_epoch" \
+                -mindepth 1 -maxdepth 1 -type d -name 'epoch:4_step:*' -print -quit)"
+        fi
+
+        if [[ ! -f "${STAGE6_CLASSIFIER_CKPT}/model.pt" || \
+              ! -f "${STAGE6_CLASSIFIER_CKPT}/classifier_rank0.pt" ]]; then
+            echo "Invalid mode-6 classifier checkpoint: ${STAGE6_CLASSIFIER_CKPT}"
+            exit 1
+        fi
+
+        run_qgface \
+            trainers.prefix=qgface_6_ir101_epoch11_model_realign \
+            models=iresnet/configs/qgface_ir101_pretrained.yaml \
+            "models.start_from=${STAGE6_CLASSIFIER_CKPT}/model.pt" \
+            models.freeze=false \
+            classifiers=configs/pfc40_freeze.yaml \
+            "classifiers.start_from=${STAGE6_CLASSIFIER_CKPT}" \
+            optims=configs/qgface_model_realign_sgd.yaml
         ;;
 esac
