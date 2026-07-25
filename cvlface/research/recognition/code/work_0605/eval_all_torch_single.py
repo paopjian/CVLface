@@ -15,6 +15,7 @@ root = pyrootutils.setup_root(
 )
 import os, sys
 import datetime
+import json
 sys.path.append(os.path.join(root))
 import numpy as np
 import time
@@ -82,6 +83,8 @@ if __name__ == '__main__':
                         help='torch.compile 模式')
     parser.add_argument('--timing', action='store_true', help='启用每个评估器的计时输出')
     parser.add_argument('--timeout_minutes', type=int, default=60, help='NCCL 通信超时(分钟)')
+    parser.add_argument('--result_path', type=str, default='',
+                        help='可选的原始指标 JSON 输出路径，供训练父进程读取')
     args = parser.parse_args()
 
     path = args.single_ckpt_path
@@ -109,7 +112,10 @@ if __name__ == '__main__':
 
     # setup output dir
     runname, save_dir_task, task = get_runname_and_task(path)
-    output_dir = os.path.join(root, 'research/recognition/experiments', task, 'eval_' + save_dir_task)
+    if args.result_path:
+        output_dir = os.path.dirname(os.path.abspath(args.result_path))
+    else:
+        output_dir = os.path.join(root, 'research/recognition/experiments', task, 'eval_' + save_dir_task)
     os.makedirs(output_dir, exist_ok=True)
 
     # load model
@@ -243,4 +249,24 @@ if __name__ == '__main__':
         summary_result = pd.DataFrame(pd.Series(summary_dict), columns=['val'])
         summary_result.to_csv(os.path.join(output_dir, f'result/eval_summary_final.csv'))
 
+        if args.result_path:
+            def json_scalar(value):
+                if isinstance(value, torch.Tensor):
+                    return value.detach().cpu().item()
+                if isinstance(value, np.generic):
+                    return value.item()
+                return value
+
+            payload = {
+                'all_result': {key: json_scalar(value) for key, value in all_result.items()},
+                'timing_results': {key: float(value) for key, value in timing_results.items()},
+                'total_elapsed_seconds': float(total_elapsed),
+            }
+            os.makedirs(os.path.dirname(args.result_path), exist_ok=True)
+            temporary_path = f'{args.result_path}.tmp.{os.getpid()}'
+            with open(temporary_path, 'w', encoding='utf-8') as handle:
+                json.dump(payload, handle, ensure_ascii=False)
+            os.replace(temporary_path, args.result_path)
+
+    fabric.barrier()
     print(f'Evaluation Finished for {path_name}')
