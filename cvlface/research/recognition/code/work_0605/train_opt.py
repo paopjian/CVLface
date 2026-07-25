@@ -486,7 +486,12 @@ if __name__ == '__main__':
         
         # 每个epoch保存模型
         fabric.barrier()
-        save_dir = os.path.join(cfg.dataset.model_save_dir, os.path.basename(cfg.trainers.output_dir), 'checkpoints_every_epoch', f'epoch:{epoch}_step:{step}')
+        save_dir = os.path.join(
+            cfg.dataset.model_save_dir,
+            os.path.basename(cfg.trainers.output_dir),
+            'checkpoints_every_epoch',
+            f'epoch:{epoch}',
+        )
         train_pipeline.save_pipelines_and_configs(save_dir, fabric, train_pipeline, cfg, epoch, step, n_images_seen)
         fabric.barrier()
 
