@@ -25,6 +25,12 @@ wandb_log_all: False
 resume: ''
 timeout_minutes: 120  # NCCL 通信超时(分钟)，评估耗时长时需增大
 
+# 在独立进程树中执行每个 epoch 的评估，避免评估 CUDA context 残留在训练进程中。
+external_eval: False
+external_eval_timeout_minutes: 120
+external_eval_poll_interval_seconds: 1.0
+external_eval_fabric_bin: '/root/anaconda3/envs/cvlface/bin/fabric'
+
 local_rank: -1  # placeholder
 world_size: -1  # placeholder
 total_batch_size: -1  # placeholder

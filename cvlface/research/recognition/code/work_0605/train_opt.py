@@ -42,6 +42,9 @@ from general_utils.dist_utils import verify_ddp_weights_equal
 from functools import partial
 from fabric.fabric import setup_dataloader_from_dataset
 import threading, queue
+import gc
+
+from external_torch_eval import run_external_torch_eval
 
 # MLflow 异步写入线程 (避免 SQLite I/O 阻塞训练循环)
 _mlflow_queue = queue.Queue()
@@ -233,6 +236,10 @@ if __name__ == '__main__':
 
     cfg.trainers.local_rank = fabric.local_rank
     cfg.trainers.world_size = fabric.world_size
+    # Bind each worker before constructing CUDA-backed objects. This avoids
+    # creating idle CUDA contexts on GPU 0 in non-zero ranks.
+    if torch.cuda.is_available():
+        torch.cuda.set_device(fabric.local_rank)
     # print = fabric.print
 
     # MLflow: 仅 rank 0 启动 run 并记录超参数 (离线 SQLite, 无需启动服务)
@@ -332,19 +339,20 @@ if __name__ == '__main__':
     eval_pipeline = pipeline_from_name(cfg.pipelines.eval_pipeline_name, model, aligner)
     eval_pipeline.integrity_check(dataloader.dataset.color_space)
 
-    # evaluation callbacks
+    # External evaluation constructs evaluators in the child process.
     evaluators = []
-    for name, info in cfg.evaluations.per_epoch_evaluations.items():
-        eval_data_path = os.path.join(cfg.evaluations.data_root, info.path)
-        eval_type = info.evaluation_type
-        eval_batch_size = info.batch_size * 4
-        eval_num_workers = info.num_workers
-        evaluator = get_evaluator_by_name(eval_type=eval_type, name=name, eval_data_path=eval_data_path,
-                                          transform=eval_pipeline.make_test_transform(),
-                                          fabric=fabric, batch_size=eval_batch_size, num_workers=eval_num_workers)
-        evaluator.integrity_check(info.color_space, eval_pipeline.color_space)
-        evaluator.config = info
-        evaluators.append(evaluator)
+    if not cfg.trainers.external_eval:
+        for name, info in cfg.evaluations.per_epoch_evaluations.items():
+            eval_data_path = os.path.join(cfg.evaluations.data_root, info.path)
+            eval_type = info.evaluation_type
+            eval_batch_size = info.batch_size * 4
+            eval_num_workers = info.num_workers
+            evaluator = get_evaluator_by_name(eval_type=eval_type, name=name, eval_data_path=eval_data_path,
+                                              transform=eval_pipeline.make_test_transform(),
+                                              fabric=fabric, batch_size=eval_batch_size, num_workers=eval_num_workers)
+            evaluator.integrity_check(info.color_space, eval_pipeline.color_space)
+            evaluator.config = info
+            evaluators.append(evaluator)
 
     # copy project files
     if fabric.local_rank == 0:
@@ -378,6 +386,8 @@ if __name__ == '__main__':
         epoch_start_time = time.time()
         epoch_loss_sum = torch.zeros(1, device=fabric.device, dtype=torch.float32)
         epoch_loss_count = 0
+        param_cache_backbone = {}
+        param_cache_classifier = {}
         
         train_pipeline.train()
         
@@ -489,12 +499,30 @@ if __name__ == '__main__':
         if cfg.evaluations.eval_every_n_epochs > 0 and model.has_trainable_params():
             print('Evaluation Started')
             eval_start_time = time.time()
+            should_evaluate = (
+                epoch % cfg.evaluations.eval_every_n_epochs == 0
+                or epoch == (cfg.optims.num_epoch - 1)
+                or epoch + 1 in cfg.optims.lr_milestones
+            )
             all_result = {}
-            for evaluator in evaluators:
-                if (epoch % cfg.evaluations.eval_every_n_epochs == 0  # every n epochs
-                    or epoch == (cfg.optims.num_epoch - 1)  # last epoch
-                    or epoch + 1 in cfg.optims.lr_milestones  # lr decay
-                ):
+            if should_evaluate and cfg.trainers.external_eval:
+                # Release epoch-local tensors before the child loads a second model copy.
+                batch = None
+                loss = None
+                param_cache_backbone.clear()
+                param_cache_classifier.clear()
+                gc.collect()
+                with torch.cuda.device(fabric.device):
+                    torch.cuda.empty_cache()
+                fabric.barrier()
+                all_result = run_external_torch_eval(
+                    fabric=fabric,
+                    cfg=cfg,
+                    checkpoint_dir=save_dir,
+                    epoch=epoch,
+                )
+            elif should_evaluate:
+                for evaluator in evaluators:
                     print(f"Evaluating {evaluator.name}")
                     result = evaluator.evaluate(eval_pipeline, epoch=epoch, step=step, n_images_seen=n_images_seen)
                     all_result.update({evaluator.name + "/" + k: v for k, v in result.items()})
@@ -504,7 +532,7 @@ if __name__ == '__main__':
             
             
             # Combined evaluations (合并多源评估)
-            combined_config = getattr(cfg.evaluations, 'combined_evaluations', None)
+            combined_config = None if cfg.trainers.external_eval else getattr(cfg.evaluations, 'combined_evaluations', None)
             if combined_config:
                 # 所有 rank 都打印，确保日志可见
                 print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
