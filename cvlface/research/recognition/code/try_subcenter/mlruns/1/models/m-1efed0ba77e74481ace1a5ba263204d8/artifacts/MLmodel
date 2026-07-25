@@ -1,0 +1,23 @@
+artifact_path: /root/zhaokj/CVLface_lmdb/cvlface/research/recognition/code/work_0605/mlruns/1/models/m-1efed0ba77e74481ace1a5ba263204d8/artifacts
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.12.13
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.12.0+cu126
+mlflow_version: 3.13.0
+model_id: m-1efed0ba77e74481ace1a5ba263204d8
+model_size_bytes: 265073
+model_uuid: m-1efed0ba77e74481ace1a5ba263204d8
+prompts: null
+run_id: b08033a65ff04582aea747230ec0e922
+utc_time_created: '2026-06-08 15:15:42.012539'

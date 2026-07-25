@@ -1,0 +1,267 @@
+ Plan to implement                                                                                                                                                                                    │
+│                                                                                                                                                                                                      │
+│ Plan: 四大方向任务                                                                                                                                                                                   │
+│                                                                                                                                                                                                      │
+│ Context                                                                                                                                                                                              │
+│                                                                                                                                                                                                      │
+│ work_0605 工作区需要现代化改造：                                                                                                                                                                     │
+│ - lightning run model 已在新版被移除，当前环境 lightning 2.1.3 甚至无法导入（pkg_resources 缺失）                                                                                                    │
+│ - mxnet 1.9.1 过时，需要移除                                                                                                                                                                         │
+│ - 需要数据格式基准测试比较不同打包方式                                                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ 数据集: /data1/dataset_0605/try — 1000类, 48091张图片, 按标签文件夹组织。                                                                                                                            │
+│                                                                                                                                                                                                      │
+│ 当前 conda env (cvlface, Python 3.12) 已安装: torch 2.8.0, numpy 2.2.6, h5py 3.16.0, zarr 3.2.1, mxnet 1.9.1, lightning 2.1.3 (broken, Python 3.12 移除了 pkg_resources)                             │
+│ 缺失: webdataset, lmdb                                                                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ ---                                                                                                                                                                                                  │
+│ 当前 Fabric 使用分析                                                                                                                                                                                 │
+│                                                                                                                                                                                                      │
+│ train5.py 实际使用：                                                                                                                                                                                 │
+│ - 官方 lightning.fabric.Fabric (line 39) — DDP setup, autocast, backward, clip_gradients, barrier, broadcast 等                                                                                      │
+│ - 自定义 fabric/fabric.py 的 setup_dataloader_from_dataset (line 43) — DataLoader 创建 + DistributedSampler                                                                                          │
+│                                                                                                                                                                                                      │
+│ 自定义 fabric/fabric.py 还有一个完整的 Fabric 类（手动 DDP+AMP），但 train5.py 没有用这个自定义类。                                                                                                  │
+│                                                                                                                                                                                                      │
+│ 问题: 当前环境 lightning 2.1.3 无法导入（缺 pkg_resources），且该版本没有 fabric run CLI。                                                                                                           │
+│                                                                                                                                                                                                      │
+│ ---                                                                                                                                                                                                  │
+│ 任务1: 修复多卡启动                                                                                                                                                                                  │
+│                                                                                                                                                                                                      │
+│ 方案: 升级 lightning + 使用 fabric run                                                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ 操作:                                                                                                                                                                                                │
+│ 1. pip install setuptools (提供 pkg_resources)                                                                                                                                                       │
+│ 2. pip install -U lightning>=2.5 (获得 fabric run CLI)                                                                                                                                               │
+│ 3. 启动命令更新:                                                                                                                                                                                     │
+│                                                                                                                                                                                                      │
+│ # 旧:                                                                                                                                                                                                │
+│ LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \                                                                                                                        │
+│     --strategy=ddp --devices=8 --precision="bf16-mixed" train5.py ...                                                                                                                                │
+│                                                                                                                                                                                                      │
+│ # 新:                                                                                                                                                                                                │
+│ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 fabric run \                                                                                                                                                    │
+│     --strategy=ddp --devices=8 --precision="bf16-mixed" train5.py ...                                                                                                                                │
+│                                                                                                                                                                                                      │
+│ 4. LIGHTING_TESTING=1 环境变量可能不再需要（是旧版 workaround），需验证                                                                                                                              │
+│                                                                                                                                                                                                      │
+│ 需修改文件:                                                                                                                                                                                          │
+│ - scripts/examples/*.sh — 更新启动命令                                                                                                                                                               │
+│ - CLAUDE.md — 更新示例                                                                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ 代码无需修改 — train5.py 中使用官方 Fabric 的方式兼容新版。                                                                                                                                          │
+│                                                                                                                                                                                                      │
+│ ---                                                                                                                                                                                                  │
+│ 任务2: 依赖兼容性检查与修复                                                                                                                                                                          │
+│                                                                                                                                                                                                      │
+│ 当前 conda env: cvlface, Python 3.12                                                                                                                                                                 │
+│                                                                                                                                                                                                      │
+│ Python 3.12 移除了 pkg_resources (原属 setuptools 的一部分)，导致 lightning 2.1.3 无法导入。需要升级 lightning 到最新版（不再依赖 pkg_resources）。                                                  │
+│                                                                                                                                                                                                      │
+│ ┌──────┬────────────────────────────────────────────────────┬─────────────────────────────────────────────┐                                                                                          │
+│ │ 操作 │                         包                         │                    原因                     │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 升级 │ lightning 到最新版                                 │ 修复 Python 3.12 兼容 + 获得 fabric run CLI │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 移除 │ pytorch-lightning                                  │ 与 lightning 包重复，新版 lightning 已包含  │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 保留 │ mxnet==1.9.1                                       │ conda env 里别的地方可能在用，不卸载        │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 安装 │ lmdb                                               │ 任务4 LMDB 格式支持                         │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 安装 │ webdataset                                         │ 任务4 WebDataset 格式支持                   │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 保留 │ h5py==3.16.0                                       │ 已安装，任务4需要                           │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 保留 │ zarr==3.2.1                                        │ 已安装，任务4需要                           │                                                                                          │
+│ ├──────┼────────────────────────────────────────────────────┼─────────────────────────────────────────────┤                                                                                          │
+│ │ 移除 │ work_0605代码中的 np.bool/np.object/np.float shims │ 是为 mxnet 加的兼容                         │                                                                                          │
+│ └──────┴────────────────────────────────────────────────────┴─────────────────────────────────────────────┘                                                                                          │
+│                                                                                                                                                                                                      │
+│ 注意：mxnet 保留在 conda env 中，只是本项目代码不再 import 它。                                                                                                                                      │
+│                                                                                                                                                                                                      │
+│ 验证: python -c "from lightning.fabric import Fabric; print('OK')"                                                                                                                                   │
+│                                                                                                                                                                                                      │
+│ ---                                                                                                                                                                                                  │
+│ 任务3: 从 work_0605 代码中移除 mxnet 依赖，用纯 Python 读取 .rec 文件                                                                                                                                │
+│                                                                                                                                                                                                      │
+│ ▎ mxnet 包保留在 conda env 中不卸载，只是本项目代码不再 import mxnet。                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ RecordIO 二进制格式 (来自 dmlc-core/recordio.h)                                                                                                                                                      │
+│                                                                                                                                                                                                      │
+│ 每条记录: [magic:4B][lrecord:4B][data:NB][padding:0-3B]                                                                                                                                              │
+│                                                                                                                                                                                                      │
+│ magic = 0xced7230a (uint32)                                                                                                                                                                          │
+│ lrecord 编码: cflag(3 bits) << 29 | length(29 bits)                                                                                                                                                  │
+│   cflag == 0: 完整记录                                                                                                                                                                               │
+│   cflag == 1/2/3: 多段记录（大记录拆分）                                                                                                                                                             │
+│ padding: 对齐到 4 字节边界                                                                                                                                                                           │
+│                                                                                                                                                                                                      │
+│ IRHeader (数据的前 24 字节): struct 'IfQQ'                                                                                                                                                           │
+│   flag: uint32 (0=单标签, >0=多标签数组长度)                                                                                                                                                         │
+│   label: float32 (当 flag==0 时)                                                                                                                                                                     │
+│   id: uint64                                                                                                                                                                                         │
+│   id2: uint64                                                                                                                                                                                        │
+│ 当 flag > 0 时，label 是后续 flag 个 float32 数组                                                                                                                                                    │
+│                                                                                                                                                                                                      │
+│ .idx 文件格式                                                                                                                                                                                        │
+│                                                                                                                                                                                                      │
+│ 文本文件，每行: index\toffset\n                                                                                                                                                                      │
+│                                                                                                                                                                                                      │
+│ 实现: dataset/recordio_reader.py (新文件)                                                                                                                                                            │
+│                                                                                                                                                                                                      │
+│ import struct                                                                                                                                                                                        │
+│ import io                                                                                                                                                                                            │
+│ from PIL import Image                                                                                                                                                                                │
+│ import numpy as np                                                                                                                                                                                   │
+│                                                                                                                                                                                                      │
+│ kMagic = 0xced7230a                                                                                                                                                                                  │
+│                                                                                                                                                                                                      │
+│ class RecordIOReader:                                                                                                                                                                                │
+│     """纯 Python MXNet RecordIO 读取器，不依赖 mxnet"""                                                                                                                                              │
+│                                                                                                                                                                                                      │
+│     def __init__(self, idx_path, rec_path):                                                                                                                                                          │
+│         self.offsets = {}                                                                                                                                                                            │
+│         with open(idx_path, 'r') as f:                                                                                                                                                               │
+│             for line in f:                                                                                                                                                                           │
+│                 idx, offset = line.strip().split('\t')                                                                                                                                               │
+│                 self.offsets[int(idx)] = int(offset)                                                                                                                                                 │
+│         self.rec_file = open(rec_path, 'rb')                                                                                                                                                         │
+│                                                                                                                                                                                                      │
+│     def read_idx(self, idx):                                                                                                                                                                         │
+│         self.rec_file.seek(self.offsets[idx])                                                                                                                                                        │
+│         # 读取 magic + lrecord                                                                                                                                                                       │
+│         header_bytes = self.rec_file.read(8)                                                                                                                                                         │
+│         magic, lrecord = struct.unpack('<II', header_bytes)                                                                                                                                          │
+│         assert magic == kMagic                                                                                                                                                                       │
+│         cflag = (lrecord >> 29) & 7                                                                                                                                                                  │
+│         length = lrecord & ((1 << 29) - 1)                                                                                                                                                           │
+│         # cflag > 0 表示多段记录（极少见，大文件才会）                                                                                                                                               │
+│         data = self.rec_file.read(length)                                                                                                                                                            │
+│         if cflag > 0:                                                                                                                                                                                │
+│             # 继续读取后续段                                                                                                                                                                         │
+│             while cflag != 3 and cflag != 0:                                                                                                                                                         │
+│                 header_bytes = self.rec_file.read(8)                                                                                                                                                 │
+│                 magic2, lrecord2 = struct.unpack('<II', header_bytes)                                                                                                                                │
+│                 cflag = (lrecord2 >> 29) & 7                                                                                                                                                         │
+│                 length2 = lrecord2 & ((1 << 29) - 1)                                                                                                                                                 │
+│                 data += self.rec_file.read(length2)                                                                                                                                                  │
+│         return data                                                                                                                                                                                  │
+│                                                                                                                                                                                                      │
+│     @staticmethod                                                                                                                                                                                    │
+│     def unpack_header(data):                                                                                                                                                                         │
+│         """解析 IRHeader: flag(I) + label(f) + id(Q) + id2(Q) = 24 bytes"""                                                                                                                          │
+│         flag, label, id_, id2 = struct.unpack('<IfQQ', data[:24])                                                                                                                                    │
+│         if flag == 0:                                                                                                                                                                                │
+│             return label, data[24:]                                                                                                                                                                  │
+│         else:                                                                                                                                                                                        │
+│             # 多标签: flag 个 float32                                                                                                                                                                │
+│             label_end = 24 + flag * 4                                                                                                                                                                │
+│             labels = struct.unpack(f'<{flag}f', data[24:label_end])                                                                                                                                  │
+│             return labels[0], data[label_end:]                                                                                                                                                       │
+│                                                                                                                                                                                                      │
+│     def close(self):                                                                                                                                                                                 │
+│         self.rec_file.close()                                                                                                                                                                        │
+│                                                                                                                                                                                                      │
+│ 需修改的文件                                                                                                                                                                                         │
+│                                                                                                                                                                                                      │
+│ 1. 新建 dataset/recordio_reader.py — 纯 Python reader (上面的代码)                                                                                                                                   │
+│ 2. dataset/base_dataset.py — 替换 mxnet:                                                                                                                                                             │
+│ # 旧: import mxnet as mx                                                                                                                                                                             │
+│ # 旧: self.imgrec = mx.recordio.MXIndexedRecordIO(...)                                                                                                                                               │
+│ # 旧: mx.recordio.unpack(s) / mx.image.imdecode(img)                                                                                                                                                 │
+│                                                                                                                                                                                                      │
+│ # 新: from .recordio_reader import RecordIOReader                                                                                                                                                    │
+│ # 新: self.reader = RecordIOReader(path_imgidx, path_imgrec)                                                                                                                                         │
+│ # 新: data = self.reader.read_idx(idx)                                                                                                                                                               │
+│ # 新: label, img_bytes = RecordIOReader.unpack_header(data)                                                                                                                                          │
+│ # 新: image = Image.open(io.BytesIO(img_bytes))                                                                                                                                                      │
+│ 3. dataset/general_dataset.py — 移除 import mxnet                                                                                                                                                    │
+│ 4. dataset/repeated_dataset.py — 移除 import mxnet                                                                                                                                                   │
+│ 5. dataset/repeated_dataset_with_ldmk_theta.py — 移除 import mxnet                                                                                                                                   │
+│ 6. evaluations/verifications/verification.py — 替换:                                                                                                                                                 │
+│ # mx.image.imdecode(img) → Image.open(io.BytesIO(img_bytes))                                                                                                                                         │
+│ # mx.image.resize_short → PIL resize 或 cv2.resize                                                                                                                                                   │
+│ # mx.ndarray.flip → np.flip                                                                                                                                                                          │
+│ 7. evaluations/custom_verification_evaluator.py — 移除 mxnet import                                                                                                                                  │
+│ 8. train.py / train5.py — 移除 numpy shims:                                                                                                                                                          │
+│ # 删除这三行:                                                                                                                                                                                        │
+│ # np.bool = np.bool_                                                                                                                                                                                 │
+│ # np.object = np.object_                                                                                                                                                                             │
+│ # np.float = np.float_                                                                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ ---                                                                                                                                                                                                  │
+│ 任务4: 数据格式基准测试                                                                                                                                                                              │
+│                                                                                                                                                                                                      │
+│ 6种格式对比                                                                                                                                                                                          │
+│                                                                                                                                                                                                      │
+│ ┌─────────────┬─────────────┬────────────────────────┐                                                                                                                                               │
+│ │    格式     │    依赖     │          特点          │                                                                                                                                               │
+│ ├─────────────┼─────────────┼────────────────────────┤                                                                                                                                               │
+│ │ ImageFolder │ torchvision │ 最简单，大量小文件 IO  │                                                                                                                                               │
+│ ├─────────────┼─────────────┼────────────────────────┤                                                                                                                                               │
+│ │ LMDB        │ lmdb        │ 内存映射，随机访问快   │                                                                                                                                               │
+│ ├─────────────┼─────────────┼────────────────────────┤                                                                                                                                               │
+│ │ RecordIO    │ 纯 Python   │ 顺序读取，兼容遗留数据 │                                                                                                                                               │
+│ ├─────────────┼─────────────┼────────────────────────┤                                                                                                                                               │
+│ │ WebDataset  │ webdataset  │ tar shards，流式读取   │                                                                                                                                               │
+│ ├─────────────┼─────────────┼────────────────────────┤                                                                                                                                               │
+│ │ HDF5        │ h5py        │ 多维数组，元数据丰富   │                                                                                                                                               │
+│ ├─────────────┼─────────────┼────────────────────────┤                                                                                                                                               │
+│ │ Zarr        │ zarr        │ 分块压缩，支持并行读   │                                                                                                                                               │
+│ └─────────────┴─────────────┴────────────────────────┘                                                                                                                                               │
+│                                                                                                                                                                                                      │
+│ 需要创建的文件                                                                                                                                                                                       │
+│                                                                                                                                                                                                      │
+│ 数据打包脚本 (scripts/benchmark/):                                                                                                                                                                   │
+│ - bundle_lmdb.py — 复用 cvlface/data_utils/.../bundle_images_into_lmdb.py 的 LMDBWriter                                                                                                              │
+│ - bundle_rec.py — 纯 Python RecordIO writer (不依赖 mxnet)                                                                                                                                           │
+│ - bundle_webdataset.py — 打包成 .tar shards                                                                                                                                                          │
+│ - bundle_hdf5.py — 打包成 .h5 文件                                                                                                                                                                   │
+│ - bundle_zarr.py — 打包成 zarr store                                                                                                                                                                 │
+│ - bundle_all.sh — 一键执行所有打包                                                                                                                                                                   │
+│                                                                                                                                                                                                      │
+│ Dataset 类 (dataset/benchmark_datasets.py):                                                                                                                                                          │
+│ - LMDBFaceDataset — 读 LMDB                                                                                                                                                                          │
+│ - RecordIOFaceDataset — 用纯 Python RecordIOReader                                                                                                                                                   │
+│ - WebDatasetFaceDataset — webdataset 库                                                                                                                                                              │
+│ - HDF5FaceDataset — h5py                                                                                                                                                                             │
+│ - ZarrFaceDataset — zarr                                                                                                                                                                             │
+│ - (ImageFolder 直接用 torchvision.datasets.ImageFolder)                                                                                                                                              │
+│                                                                                                                                                                                                      │
+│ 基准测试脚本 (benchmark_dataformat.py):                                                                                                                                                              │
+│ - 两轮测试: iResNet-18 (突出 IO) + iResNet-101 (贴近真实)                                                                                                                                            │
+│ - 多卡 DDP (fabric run 启动)                                                                                                                                                                         │
+│ - 简化训练循环: forward + backward + optimizer.step, 跑 1 epoch                                                                                                                                      │
+│ - 测量:                                                                                                                                                                                              │
+│   - 磁盘空间占用 (打包后)                                                                                                                                                                            │
+│   - 打包耗时                                                                                                                                                                                         │
+│   - 1 epoch wall time (秒)                                                                                                                                                                           │
+│   - 平均 batch 数据加载时间 (ms)                                                                                                                                                                     │
+│   - GPU 利用率                                                                                                                                                                                       │
+│   - CPU 内存峰值                                                                                                                                                                                     │
+│ - rank 0 输出对比表格                                                                                                                                                                                │
+│                                                                                                                                                                                                      │
+│ 启动方式:                                                                                                                                                                                            │
+│ # 打包                                                                                                                                                                                               │
+│ cd scripts/benchmark && bash bundle_all.sh                                                                                                                                                           │
+│                                                                                                                                                                                                      │
+│ # 基准测试                                                                                                                                                                                           │
+│ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 fabric run \                                                                                                                                                    │
+│     --strategy=ddp --devices=8 --precision="bf16-mixed" \                                                                                                                                            │
+│     benchmark_dataformat.py --data_root /data1/dataset_0605/try                                                                                                                                      │
+│                                                                                                                                                                                                      │
+│ ---                                                                                                                                                                                                  │
+│ 执行顺序                                                                                                                                                                                             │
+│                                                                                                                                                                                                      │
+│ 1. 任务2 — 先修复依赖 (pip install setuptools, 升级 lightning, 安装 lmdb/webdataset)                                                                                                                 │
+│ 2. 任务1 — 更新启动命令，验证 fabric run 能工作                                                                                                                                                      │
+│ 3. 任务3 — 写纯 Python RecordIO reader，移除 mxnet                                                                                                                                                   │
+│ 4. 任务4 — 写打包脚本 + Dataset 类 + benchmark 脚本，运行对比                                                                                                                                        │
+│                                                                                                                                                                                                      │
+│ 验证方式                                                                                                                                                                                             │
+│                                                                                                                                                                                                      │
+│ - 任务1: fabric run --strategy=ddp --devices=2 train5.py trainers.limit_num_batch=4 dataset=configs/synthetic.yaml 跑通                                                                              │
+│ - 任务2: python -c "from lightning.fabric import Fabric; print('OK')" 成功                                                                                                                           │
+│ - 任务3: 对比新 RecordIOReader 和旧 mxnet reader 读同一 .rec 文件的输出逐像素一致                                                                                                                    │
+│ - 任务4: 6种格式都能跑完 1 epoch，输出性能对比表

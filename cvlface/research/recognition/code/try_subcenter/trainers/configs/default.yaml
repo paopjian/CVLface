@@ -1,0 +1,39 @@
+
+task: ''
+prefix: 'default'
+debug: False
+mock_lr_run: False
+limit_num_batch: -1
+skip_final_eval: False
+
+batch_size: 512  # per gpu
+num_gpu: 1
+#precision: '16-mixed' # 32-true
+precision: 'bf16-mixed'
+float32_matmul_precision: high
+
+gradient_acc: 1
+seed: 2048
+num_workers: 3
+
+wandb_key: ''
+suffix_run_name: None
+using_wandb: True
+wandb_entity: 'mckim'
+wandb_log_all: False
+
+resume: ''
+timeout_minutes: 120  # NCCL 通信超时(分钟)，评估耗时长时需增大
+
+# 在独立进程树中执行每个 epoch 的评估，避免评估 CUDA context 残留在训练进程中。
+external_eval: False
+external_eval_timeout_minutes: 120
+external_eval_poll_interval_seconds: 1.0
+external_eval_fabric_bin: '/root/anaconda3/envs/cvlface/bin/fabric'
+
+local_rank: -1  # placeholder
+world_size: -1  # placeholder
+total_batch_size: -1  # placeholder
+warmup_step: -1  # placeholder
+total_step: -1  # placeholder
+output_dir: ''  # placeholder

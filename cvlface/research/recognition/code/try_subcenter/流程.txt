@@ -1,0 +1,111 @@
+################################################################################
+# dataset_0605 Sub-center AdaFace 五阶段训练流程
+################################################################################
+
+模型:
+  iResNet-101，初始权重为 AdaFace/WebFace12M
+
+数据:
+  /data1/dataset_0605/train_rec
+  RecordIO，791509 类，37084481 张图片
+
+分类器:
+  Sub-center PartialFC，K=3
+  阶段 1~4 sample_rate=0.4
+  阶段 5 sample_rate=1.0
+
+输出:
+  /data1/dataset_0605/train_output/<stage-prefix>_<date>_<trial>/
+  checkpoints_every_epoch/epoch:N/
+
+训练入口:
+  train_opt.py
+
+注意:
+  train_opt.py 已在代码中创建 DDPStrategy，不要给 fabric run 添加 --strategy。
+  新 checkpoint 目录只包含 epoch，不再把 step 写入目录名。
+
+################################################################################
+# 五个阶段
+################################################################################
+
+阶段 1：K=3 分类器预热
+  - backbone 冻结
+  - classifier 训练
+  - PartialFC sample_rate=0.4
+  - 5 epoch
+
+阶段 2：body.36 微调
+  - 解冻 body.36~body.48 和 output_layer
+  - classifier 权重冻结
+  - 自动加载阶段 1 的最大 epoch
+  - 15 epoch
+  - 使用 val_20260605 每轮评估
+
+阶段 3：K=3 分类器重新对齐
+  - backbone 冻结
+  - classifier 训练
+  - PartialFC sample_rate=0.4
+  - 自动加载阶段 2 的最大 epoch
+  - 5 epoch
+
+阶段 4：backbone 与分类器联合训练
+  - backbone 全量解冻
+  - classifier 训练
+  - PartialFC sample_rate=0.4
+  - 自动加载阶段 3 的最大 epoch
+  - 15 epoch
+  - 使用 val_20260605 每轮评估最终 backbone
+
+阶段 5：用于数据清洗的分类器最终对齐
+  - 最终 backbone 冻结
+  - classifier 训练
+  - PartialFC sample_rate=1.0
+  - 自动加载阶段 4 的最大 epoch
+  - 2 epoch
+  - 阶段 5 的 classifier_rank*.pt 用于主导子中心统计和 Drop75
+
+################################################################################
+# 启动
+################################################################################
+
+cd "/root/zhaokj/CVLface/cvlface/research/recognition/code/try_subcenter"
+bash "scripts/examples/run_subcenter_5stage_0605.sh"
+
+脚本使用 8 张 GPU：
+  CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+可通过环境变量覆盖：
+
+  NUM_GPUS=7 \
+  CUDA_DEVICES=0,1,2,3,4,5,6 \
+  bash "scripts/examples/run_subcenter_5stage_0605.sh"
+
+从已有阶段继续，例如阶段 1、2 已完成，从阶段 3 开始：
+
+  START_STAGE=3 bash "scripts/examples/run_subcenter_5stage_0605.sh"
+
+脚本会按 prefix 自动查找对应阶段最近一次成功运行的最大 epoch，并检查其中至少存在：
+  model.pt
+  classifier_rank0.pt
+
+不再需要手工填写 STAGE1_CKPT、STAGE2_CKPT 等路径。
+
+################################################################################
+# 最终产物
+################################################################################
+
+部署和评估模型:
+  阶段 5 最后 epoch 的 model.pt
+  该模型与阶段 4 最后 epoch 的 backbone 相同。
+
+训练集清洗分类器:
+  阶段 5 最后 epoch 的 classifier_rank0.pt ... classifier_rank(N-1).pt
+  N 等于训练时的 NUM_GPUS
+
+正式清洗时应使用无随机增强的推理预处理提取归一化 embedding：
+  1. 重建全部 K=3 分类中心。
+  2. 统计每个身份三个子中心的样本归属数量。
+  3. 选择样本数最多的主导子中心。
+  4. 丢弃与主导中心夹角大于 75 度的样本。
+  5. 输出到新的 RecordIO 目录，不覆盖原始 train_rec。
