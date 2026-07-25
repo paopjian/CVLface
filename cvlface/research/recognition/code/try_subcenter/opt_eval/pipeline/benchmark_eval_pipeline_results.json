@@ -1,0 +1,162 @@
+[
+  {
+    "config": "no_compile_bf16",
+    "evaluators": {
+      "work_0605_3t": {
+        "extract": 155.9954571723938,
+        "compute": 1.5716438293457031
+      },
+      "work_0605_enhance": {
+        "extract": 10.361413717269897,
+        "compute": 0.11887645721435547
+      },
+      "work_0605_glint": {
+        "extract": 240.22517824172974,
+        "compute": 2.219111442565918
+      },
+      "cplfw": {
+        "extract": 4.363886833190918,
+        "compute": 2.406778573989868
+      },
+      "calfw": {
+        "extract": 4.579397201538086,
+        "compute": 2.398914337158203
+      },
+      "agedb_30": {
+        "extract": 4.572706937789917,
+        "compute": 2.4151322841644287
+      },
+      "tinyface": {
+        "extract": 35.669970989227295,
+        "compute": 19.794132232666016
+      }
+    },
+    "total_extract": 455.76801109313965,
+    "total_compute": 30.924589157104492,
+    "total": 492.8717246055603,
+    "setup_time": 5.76404070854187,
+    "compile_time": 0,
+    "trt_build_time": 0,
+    "trt_load_time": 0
+  },
+  {
+    "config": "compile_bf16",
+    "evaluators": {
+      "work_0605_3t": {
+        "extract": 153.59664034843445,
+        "compute": 1.3967866897583008
+      },
+      "work_0605_enhance": {
+        "extract": 9.709392547607422,
+        "compute": 0.09641098976135254
+      },
+      "work_0605_glint": {
+        "extract": 206.23361229896545,
+        "compute": 2.204601287841797
+      },
+      "cplfw": {
+        "extract": 4.480058431625366,
+        "compute": 1.9320793151855469
+      },
+      "calfw": {
+        "extract": 4.556836843490601,
+        "compute": 2.4429304599761963
+      },
+      "agedb_30": {
+        "extract": 4.517740488052368,
+        "compute": 2.475315809249878
+      },
+      "tinyface": {
+        "extract": 32.3830292224884,
+        "compute": 20.49728798866272
+      }
+    },
+    "total_extract": 415.47731018066406,
+    "total_compute": 31.04541254043579,
+    "total": 452.7909164428711,
+    "setup_time": 0,
+    "compile_time": 122.0856420993805,
+    "trt_build_time": 0,
+    "trt_load_time": 0
+  },
+  {
+    "config": "compile_fp16",
+    "evaluators": {
+      "work_0605_3t": {
+        "extract": 132.82160067558289,
+        "compute": 1.435549020767212
+      },
+      "work_0605_enhance": {
+        "extract": 10.169134855270386,
+        "compute": 0.07559013366699219
+      },
+      "work_0605_glint": {
+        "extract": 207.52957963943481,
+        "compute": 2.2160606384277344
+      },
+      "cplfw": {
+        "extract": 4.355312347412109,
+        "compute": 2.3719301223754883
+      },
+      "calfw": {
+        "extract": 4.6381330490112305,
+        "compute": 2.370755672454834
+      },
+      "agedb_30": {
+        "extract": 4.571517705917358,
+        "compute": 2.377058982849121
+      },
+      "tinyface": {
+        "extract": 32.26325750350952,
+        "compute": 19.418017864227295
+      }
+    },
+    "total_extract": 396.3485357761383,
+    "total_compute": 30.264962434768677,
+    "total": 433.4916636943817,
+    "setup_time": 0,
+    "compile_time": 119.15628814697266,
+    "trt_build_time": 0,
+    "trt_load_time": 0
+  },
+  {
+    "config": "trt_fp16",
+    "evaluators": {
+      "work_0605_3t": {
+        "extract": 112.63616418838501,
+        "compute": 1.4364607334136963
+      },
+      "work_0605_enhance": {
+        "extract": 8.791281461715698,
+        "compute": 0.08318638801574707
+      },
+      "work_0605_glint": {
+        "extract": 174.52706003189087,
+        "compute": 2.1939797401428223
+      },
+      "cplfw": {
+        "extract": 4.236750602722168,
+        "compute": 4.37811279296875
+      },
+      "calfw": {
+        "extract": 4.4379723072052,
+        "compute": 4.368111610412598
+      },
+      "agedb_30": {
+        "extract": 4.681588649749756,
+        "compute": 4.397248983383179
+      },
+      "tinyface": {
+        "extract": 32.252525091171265,
+        "compute": 20.351735830307007
+      }
+    },
+    "total_extract": 341.56334233283997,
+    "total_compute": 37.2088360786438,
+    "total": 385.64262437820435,
+    "setup_time": 0,
+    "compile_time": 0,
+    "trt_build_time": 56.206737995147705,
+    "trt_load_time": 0.10244035720825195
+  }
+]
