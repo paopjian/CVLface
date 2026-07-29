@@ -1,0 +1,9 @@
+wandb/
+
+# Local experiment state and personal working materials
+mlflow.db
+mlruns/
+*.ipynb
+计划*
+记录*
+临时文件

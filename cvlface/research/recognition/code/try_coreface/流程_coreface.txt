@@ -1,0 +1,61 @@
+################################################################################
+# CoreFace-AdaFace 训练流程
+# 入口: train_opt.py
+# 数据: dataset_0605_train_rec.yaml (RecordIO, train_rec)
+# 前期单视图 AdaFace；第 8 个 epoch 起启用双 dropout + ContraFace。
+################################################################################
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export LD_LIBRARY_PATH=/root/anaconda/envs/cvlface/lib:$LD_LIBRARY_PATH
+export DECODE_BACKEND=turbojpeg
+
+COMMON="trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+trainers.precision=bf16-mixed \
+models=iresnet/configs/v1_ir101.yaml \
+models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+dataset=configs/dataset_0605_train_rec.yaml \
+data_augs=configs/basic_v2_numpy.yaml \
+classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+losses=configs/adaface_coreface.yaml \
+pipelines=configs/train_model_cls_coreface.yaml \
+dataset.model_save_dir=/data1/dataset_0605/train_output"
+
+# 阶段1: 冻结 backbone，先适配新数据的分类器（CoreFace 自动关闭）
+fabric run --devices=8 --precision="bf16-mixed" train_opt.py \
+  trainers.prefix=coreface_s1_classifier_0605 $COMMON \
+  trainers.batch_size=512 \
+  models.freeze=True pefts=configs/freeze.yaml \
+  optims=configs/step_sgd.yaml optims.lr=0.008 optims.num_epoch=5 \
+  "optims.lr_milestones=[2,4]" trainers.skip_final_eval=True
+
+# 阶段2: 从阶段1继续，解冻 body.36 之后的 backbone；第8个 epoch启用 CoreFace
+STAGE1_CKPT="/data1/dataset_0605/train_output/<stage1>/checkpoints_every_epoch/epoch:4"
+fabric run --devices=8 --precision="bf16-mixed" train_opt.py \
+  trainers.prefix=coreface_s2_body36_0605 $COMMON \
+  classifiers.freeze=True \
+  models.freeze=True pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
+  pefts.classifier_ckpt_dir=${STAGE1_CKPT} \
+  optims=configs/cosine.yaml optims.lr=0.008 optims.num_epoch=15 \
+  optims.warmup_epoch=2 trainers.skip_final_eval=True
+
+# 阶段3: 冻结微调后的 backbone，重训分类器（CoreFace 自动关闭）
+STAGE2_CKPT="/data1/dataset_0605/train_output/<stage2>/checkpoints_every_epoch/epoch:14"
+fabric run --devices=8 --precision="bf16-mixed" train_opt.py \
+  trainers.prefix=coreface_s3_classifier_0605 $COMMON \
+  trainers.batch_size=512 \
+  models.start_from=${STAGE2_CKPT}/model.pt models.freeze=True \
+  pefts=configs/freeze.yaml pefts.classifier_ckpt_dir=${STAGE2_CKPT} \
+  optims=configs/step_sgd.yaml optims.lr=0.006 optims.num_epoch=5 \
+  "optims.lr_milestones=[2,4]" trainers.skip_final_eval=True
+
+# 阶段4: 全量解冻。epoch 8 起继续使用 CoreFace 双视图训练。
+STAGE3_CKPT="/data1/dataset_0605/train_output/<stage3>/checkpoints_every_epoch/epoch:4"
+fabric run --devices=8 --precision="bf16-mixed" train_opt.py \
+  trainers.prefix=coreface_s4_full_0605 $COMMON \
+  classifiers.freeze=True \
+  models.start_from=${STAGE3_CKPT}/model.pt models.freeze=False \
+  pefts=configs/full.yaml pefts.classifier_ckpt_dir=${STAGE3_CKPT} \
+  optims=configs/cosine.yaml optims.lr=0.0008 optims.num_epoch=15 \
+  optims.warmup_epoch=2 trainers.skip_final_eval=False
+
+# <stageN> 和 <step> 替换为实际输出目录；四个阶段均固定使用 train_rec。

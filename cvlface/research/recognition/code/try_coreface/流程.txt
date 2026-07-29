@@ -1,0 +1,271 @@
+################################################################################
+# dataset_0605 多阶段训练流程
+# 模型: iResNet-101 (AdaFace/WebFace12M pretrained)
+# 数据: /data1/dataset_0605/train_rec (RecordIO格式, 791509类, 37M图片)
+# 输出: /data1/dataset_0605/train_output/
+# 硬件: 7x RTX4090
+#
+# 流程:
+#   阶段1: 分类器训练 (backbone冻结)
+#   阶段2: body.36解冻训练, 分类器冻结
+#   阶段3: 分类器训练 (backbone冻结, 从阶段2 checkpoint继续)
+#   阶段4: 模型全解冻, 分类器冻结
+#
+# 性能优化 (已应用):
+#   - 数据格式: RecordIO (比ImageFolder快33%, 比LMDB磁盘占用少)
+#   - 解码后端: TurboJPEG (比PIL快10%, DECODE_BACKEND=turbojpeg)
+#   - Augmenter: v2 numpy版 (比PIL版快5%, 零PIL依赖)
+#   - DataLoader: persistent_workers + prefetch_factor=3
+#   - GPU: torch.compile + channels_last + cudnn.benchmark (+31%)
+#
+# 注意: fabric run 需要 LD_LIBRARY_PATH 修复 scipy/libstdc++ 兼容问题
+################################################################################
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export LD_LIBRARY_PATH=/root/anaconda/envs/cvlface/lib:$LD_LIBRARY_PATH
+export DECODE_BACKEND=turbojpeg
+
+# 公共参数
+COMMON="trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+trainers.precision=bf16-mixed \
+models=iresnet/configs/v1_ir101.yaml \
+models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+dataset=configs/dataset_0605_train_rec.yaml \
+data_augs=configs/basic_v2_numpy.yaml \
+classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+losses=configs/adaface.yaml \
+evaluations=configs/val_20260605.yaml \
+dataset.model_save_dir=/data1/dataset_0605/train_output"
+
+
+COMMON="trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+trainers.precision=bf16-mixed \
+models=iresnet/configs/v1_ir101.yaml \
+models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+dataset=configs/dataset_0605_train_rec2.yaml \
+data_augs=configs/basic_v2_numpy.yaml \
+classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+losses=configs/adaface.yaml \
+evaluations=configs/val_20260605.yaml \
+dataset.model_save_dir=/data1/dataset_0605/train_output"
+
+################################################################################
+# 阶段1: 分类器训练 (backbone全冻结)
+# 目的: 在冻结backbone上训练分类器, 让FC权重适应新数据分布
+################################################################################
+
+fabric run --devices=8 --precision="bf16-mixed" \
+    train5.py \
+    trainers.prefix=ft_ir101_s1_cls_warmup_0605 \
+    $COMMON \
+    models.freeze=True \
+    pefts=configs/freeze.yaml trainers.batch_size=512\
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=True
+Epoch 0 | Step 553 | Batch 552 | Speed 18288 | LR 0.00049 | Loss 42.0000:   6%|██▏  | 553/9053 [02:16<31:56,  4.43it/s]
+conda activate cvlface 
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    trainers.prefix=s1_warmup_0605 \
+    $COMMON \
+    models.freeze=True \
+    pefts=configs/freeze.yaml trainers.batch_size=512\
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=True
+Epoch 4 | Step 45265 | Batch 9052 | Speed 30126 | LR 0.00072 | Loss 7.0938: 100%|█████████████████████████████████| 9053/9053 [22:59<00:00,  6.56it/s]
+
+优化后,使用rec文件
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    trainers.prefix=s1_warmup_0605_v2 \
+    $COMMON \
+    models.freeze=True \
+    pefts=configs/freeze.yaml trainers.batch_size=512\
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=True
+Epoch 0 | Step 9053 | Batch 9052 | Speed 30218 | LR 0.00800 | Loss 19.1250: 100%|█████████████████████████████████| 9053/9053 [23:26<00:00,  6.43it/s]
+
+################################################################################
+# 阶段2: body.36解冻训练, 分类器冻结
+# 目的: 解冻backbone后半部分(body.36~48+output_layer), 微调特征提取能力
+# 输入: 阶段1的best/last checkpoint
+# 注意: classifier通过pefts.classifier_ckpt_dir加载, 但冻结不更新
+################################################################################
+
+# >>> 根据阶段1输出修改 STAGE1_CKPT 路径 <<<
+STAGE1_CKPT="/data1/dataset_0605/train_output/s1_warmup_0605_06-10_3/checkpoints_every_epoch/epoch:4_step:45265"
+
+conda run -n cvlface 
+fabric run --devices=8 --precision="bf16-mixed" \
+    train5.py \
+    trainers.prefix=ft_ir101_s2_body36_0605 \
+    trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+    models.freeze=False \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    data_augs=configs/gridsample_v2_numpy.yaml \
+    classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+    losses=configs/adaface.yaml \
+    pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
+    pefts.classifier_ckpt_dir=${STAGE1_CKPT} \
+    optims.lr=0.008 optims.num_epoch=15 \
+    optims.warmup_epoch=2 \
+    optims.momentum=0.9 optims.weight_decay=0.0005 \
+    optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+    optims.scheduler='cosine' \
+    trainers.skip_final_eval=True \
+    evaluations=configs/val_20260605.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
+
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    $COMMON \
+    trainers.prefix=s2_body36_0605_v2 \
+    trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+    models.freeze=True \
+    classifiers.freeze=True \
+    data_augs=configs/gridsample_v2_numpy.yaml \
+    pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s1_warmup_0605_v2_06-13_0/checkpoints_every_epoch/epoch:4_step:43070 \
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.008 optims.num_epoch=15 \
+    optims.warmup_epoch=2 \
+    optims.momentum=0.9 optims.weight_decay=0.0005 \
+    optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+    optims.scheduler='cosine' \
+    trainers.skip_final_eval=True \
+    dataset=configs/dataset_0605_train_rec2.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
+
+################################################################################
+# 阶段3: 分类器训练 (backbone冻结, 从阶段2继续)
+# 目的: 冻结微调后的backbone, 重新训练分类器适应新特征分布
+# 输入: 阶段2的best checkpoint (通过 trainers.resume 恢复整个pipeline)
+################################################################################
+
+# >>> 根据阶段2输出修改 STAGE2_CKPT 路径 <<<
+STAGE2_CKPT="/data1/dataset_0605/train_output/ft_ir101_s2_body36_0605_06-XX_0/checkpoints_every_epoch/epoch:7_step:XXXXX"
+
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    trainers.prefix=s3_classifier_0605 \
+    trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=/data1/dataset_0605/train_output/s2_body36_0605_v2_06-15_2/checkpoints_every_epoch/epoch:10_step:94754/model.pt \
+    models.freeze=True \
+    dataset=configs/dataset_0605_train_rec2.yaml \
+    data_augs=configs/gridsample_v2_numpy.yaml \
+    classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+    losses=configs/adaface.yaml \
+    pefts=configs/freeze.yaml \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s2_body36_0605_v2_06-15_2/checkpoints_every_epoch/epoch:10_step:94754 \
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.006 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=True \
+    evaluations=configs/val_20260605.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
+
+
+################################################################################
+# 阶段4: 模型全解冻, 分类器冻结
+# 目的: 全模型微调, 端到端对齐特征空间
+# 输入: 阶段3的best checkpoint
+################################################################################
+
+# >>> 根据阶段3输出修改 STAGE3_CKPT 路径 <<<
+STAGE3_CKPT="/data1/dataset_0605/train_output/s3_classifier_0605_06-11_1/checkpoints_every_epoch/epoch:4_step:45265"
+
+conda run -n cvlface fabric run --strategy=ddp --devices=8 --precision="bf16-mixed" \
+    train5.py \
+    trainers.prefix=ft_ir101_s4_full_0605 \
+    trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=${STAGE3_CKPT}/model.pt \
+    models.freeze=False \
+    dataset=configs/dataset_0605_train_rec.yaml \
+    data_augs=configs/basic_v2_numpy.yaml \
+    classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+    losses=configs/adaface.yaml \
+    pefts=configs/full.yaml \
+    pefts.classifier_ckpt_dir=${STAGE3_CKPT} \
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.002 optims.num_epoch=10 "optims.lr_milestones=[5,8]" \
+    optims.momentum=0.9 optims.weight_decay=0.0001 \
+    optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+    trainers.skip_final_eval=False \
+    evaluations=configs/val_20260605.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
+
+fabric run --devices=8 --precision="bf16-mixed" \
+    train_opt.py \
+    $COMMON \
+    trainers.prefix=s4_full_0605_v2 \
+    trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+    trainers.precision=bf16-mixed \
+    models=iresnet/configs/v1_ir101.yaml \
+    models.start_from=/data1/dataset_0605/train_output/s3_classifier_0605_06-16_0/checkpoints_every_epoch/epoch:4_step:43070/model.pt \
+    classifiers.freeze=True \
+    data_augs=configs/gridsample_v2_numpy.yaml \
+    pefts=configs/full.yaml \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s3_classifier_0605_06-16_0/checkpoints_every_epoch/epoch:4_step:43070 \
+    optims=configs/step_sgd.yaml \
+    optims.lr=0.0008 optims.num_epoch=15 \
+    optims.warmup_epoch=2 \
+    optims.momentum=0.9 optims.weight_decay=0.0005 \
+    optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
+    optims.scheduler='cosine' \
+    trainers.skip_final_eval=True \
+    dataset=configs/dataset_0605_train_rec2.yaml \
+    dataset.model_save_dir=/data1/dataset_0605/train_output
+
+
+################################################################################
+# 最终测试评估 (使用阶段4的best checkpoint)
+################################################################################
+
+# >>> 根据阶段4输出修改 FINAL_CKPT 路径 <<<
+FINAL_CKPT="/data1/dataset_0605/train_output/ft_ir101_s4_full_0605_06-XX_0/checkpoints_every_epoch/best"
+
+conda run -n cvlface fabric run --strategy=ddp --devices=8 --precision="bf16-mixed" \
+    eval.py --num_gpu 7 --eval_config_name test_20260605 --ckpt_dir ${FINAL_CKPT}
+
+
+################################################################################
+# 备注
+################################################################################
+# 1. 每阶段的 STAGE*_CKPT 路径需要根据实际运行后的输出目录名称修改
+#    (日期和step会变, 格式: prefix_MM-DD_trial/checkpoints_every_epoch/epoch:N_step:M)
+#
+# 2. pefts.classifier_ckpt_dir: 加载已训练的分类器权重(classifier.pt)
+#    models.start_from: 加载backbone权重(model.pt)
+#
+# 3. 阶段间分类器冻结/解冻逻辑:
+#    - models.freeze=True + pefts=freeze: backbone冻结, 只训练classifier
+#    - pefts=part_freeze + pefts.target_modules=body.36: 解冻body.36~48,
+#      classifier通过ckpt_dir加载但参与训练(grad flows)
+#    - pefts=full: 全部参数可训练
+#    - 要真正冻结分类器不训练, 需要在optims中将classifier的lr设为0
+#      或者使用 classifiers.freeze=True (如果支持)
+#
+# 4. Parquet缓存: 首次运行会扫描37M文件建立缓存(约10-15分钟),
+#    后续启动直接加载约31秒
+#
+# 5. LD_LIBRARY_PATH 修复: 必须设置, 否则 scipy 会因 libstdc++ 版本不匹配报错
