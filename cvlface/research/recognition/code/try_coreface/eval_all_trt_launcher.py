@@ -10,7 +10,7 @@ eval_all_3_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
 python eval_all_3_launcher.py \
   --num_gpu 7 \
   --eval_config_name test_20260605 \
-  --ckpt_dir /data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch \
+  --ckpt_dir data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch/ \
   --project_name work_0605_test \
   --name s2_body36_0605_06-10_2_trt
 """
