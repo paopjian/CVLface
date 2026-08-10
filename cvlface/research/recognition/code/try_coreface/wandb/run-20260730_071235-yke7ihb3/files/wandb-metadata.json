@@ -1,0 +1,23 @@
+{
+  "os": "Linux-5.15.0-185-generic-x86_64-with-glibc2.35",
+  "python": "CPython 3.12.13",
+  "startedAt": "2026-07-30T07:12:35.524309Z",
+  "args": [
+    "--project",
+    "work_0605_test",
+    "--step-metric",
+    "epoch"
+  ],
+  "program": "/root/zhaokj/CVLface/cvlface/research/recognition/code/try_coreface/merge_coreface_s2_wandb.py",
+  "codePath": "cvlface/research/recognition/code/try_coreface/merge_coreface_s2_wandb.py",
+  "codePathLocal": "merge_coreface_s2_wandb.py",
+  "git": {
+    "remote": "https://github.com/paopjian/CVLface.git",
+    "commit": "cf639a25bd7d21b5854c2febc33c3c5e07f138b8"
+  },
+  "email": "kejian.zhao@tsings.cn",
+  "root": "/root/zhaokj/CVLface/cvlface/research/recognition/code/try_coreface",
+  "host": "qingsi",
+  "executable": "/root/anaconda3/envs/cvlface/bin/python",
+  "writerId": "nmjdjixbfz184q2vbkx6ld7hqfemh7ri"
+}

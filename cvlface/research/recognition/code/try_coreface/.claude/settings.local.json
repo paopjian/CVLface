@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda run *)",
+      "Bash(grep -niA3 \"stage\\\\|norm\\\\|pretrain\\\\|flag\\\\|lambda\\\\|two\\\\|first\\\\|second\\\\|warm\\\\|arcface\")",
+      "Read(//data1/dataset_0605/train_output/**)",
+      "Bash(tmux capture-pane *)"
+    ]
+  }
+}

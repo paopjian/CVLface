@@ -1,0 +1,47 @@
+_wandb:
+    value:
+        cli_version: 0.27.2
+        e:
+            nmjdjixbfz184q2vbkx6ld7hqfemh7ri:
+                args:
+                    - --project
+                    - work_0605_test
+                    - --step-metric
+                    - epoch
+                codePath: cvlface/research/recognition/code/try_coreface/merge_coreface_s2_wandb.py
+                codePathLocal: merge_coreface_s2_wandb.py
+                email: kejian.zhao@tsings.cn
+                executable: /root/anaconda3/envs/cvlface/bin/python
+                git:
+                    commit: cf639a25bd7d21b5854c2febc33c3c5e07f138b8
+                    remote: https://github.com/paopjian/CVLface.git
+                host: qingsi
+                os: Linux-5.15.0-185-generic-x86_64-with-glibc2.35
+                program: /root/zhaokj/CVLface/cvlface/research/recognition/code/try_coreface/merge_coreface_s2_wandb.py
+                python: CPython 3.12.13
+                root: /root/zhaokj/CVLface/cvlface/research/recognition/code/try_coreface
+                startedAt: "2026-07-30T07:12:35.524309Z"
+                writerId: nmjdjixbfz184q2vbkx6ld7hqfemh7ri
+        m:
+            - "1": epoch
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.12.13
+        t:
+            "3":
+                - 2
+                - 7
+                - 13
+                - 15
+                - 16
+                - 62
+            "4": 3.12.13
+            "5": 0.27.2
+            "12": 0.27.2
+            "13": linux-x86_64
