@@ -1,0 +1,12 @@
+defaults:
+  - trainers : configs/default
+  - optims : configs/cosine
+  - pefts: configs/none
+  - models: iresnet/configs/v1_ir101
+  - classifiers: configs/partial_fc_subcenter_k3_sample40
+  - aligners: configs/none
+  - dataset: configs/casia
+  - data_augs: configs/basic_v2_numpy
+  - losses: configs/adaface_coreface
+  - pipelines: configs/train_model_cls_coreface
+  - evaluations: configs/base

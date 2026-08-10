@@ -1,0 +1,775 @@
+import pyrootutils
+root = pyrootutils.setup_root(
+    search_from=__file__,
+    indicator=["__root__.txt"],
+    pythonpath=True,
+    dotenv=True,
+)
+import json
+import os, sys
+
+code_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, code_dir)
+sys.path.append(os.path.join(root))
+import numpy as np
+
+import pandas as pd
+import torch
+import config
+from config import Config
+from models import get_model
+from classifiers import get_classifier
+from aligners import get_aligner
+from losses import get_margin_loss
+from dataset import get_train_dataset, visualize_dataset, set_epoch
+from evaluations import get_evaluator_by_name
+from general_utils import random_utils, os_utils
+from optims.optims import make_optimizer
+from lightning.fabric.loggers import CSVLogger
+from lightning.pytorch.loggers import WandbLogger
+from optims.lr_scheduler import make_scheduler, scheduler_step, get_last_lr
+from pipelines import pipeline_from_config, pipeline_from_name
+import omegaconf
+import lovely_tensors as lt
+lt.monkey_patch()
+from tqdm import tqdm
+from evaluations import IsBestTracker, summary
+from evaluations import run_combined_evaluations
+import time
+import mlflow
+from lightning.fabric import Fabric
+from lightning.fabric.strategies import DDPStrategy
+import datetime
+from pefts import apply_peft
+from general_utils.dist_utils import verify_ddp_weights_equal
+from functools import partial
+from fabric.fabric import setup_dataloader_from_dataset
+import threading, queue
+import gc
+
+from external_torch_eval import run_external_torch_eval
+
+# MLflow 异步写入线程 (避免 SQLite I/O 阻塞训练循环)
+_mlflow_queue = queue.Queue()
+
+def _mlflow_writer():
+    while True:
+        item = _mlflow_queue.get()
+        if item is None:
+            break
+        metrics, step = item
+        try:
+            mlflow.log_metrics(metrics, step=step)
+        except Exception:
+            pass
+
+_mlflow_thread = threading.Thread(target=_mlflow_writer, daemon=True)
+_mlflow_thread.start()
+
+
+def get_norm(module):
+    """计算模块梯度的 L2 norm (GPU 上累积, 只一次 sync)."""
+    params = [p for p in module.parameters() if p.grad is not None]
+    if not params:
+        return 0.0
+    # 利用 clip_grad_norm_ 的 fused multi-tensor kernel, max_norm=inf 不做裁剪
+    return torch.nn.utils.clip_grad_norm_(params, max_norm=float('inf')).item()
+    
+def compute_update_ratio(module, param_cache):
+    if module is None or len(param_cache) == 0:
+        return 0.0
+    device = next(module.parameters()).device
+    total_delta_sq = torch.zeros(1, device=device)
+    total_param_sq = torch.zeros(1, device=device)
+    for name, p in module.named_parameters():
+        if name in param_cache:
+            delta = p.data - param_cache[name]
+            total_delta_sq += delta.norm(2) ** 2
+            total_param_sq += param_cache[name].norm(2) ** 2
+    if total_param_sq.item() > 0:
+        return (total_delta_sq.sqrt() / total_param_sq.sqrt()).item()
+    else:
+        return 0.0
+
+def log_classifier(classifier, log_dict):
+    if classifier is not None and hasattr(classifier, 'partial_fc') and hasattr(classifier.partial_fc, 'batch_mean') and hasattr(classifier.partial_fc, 'batch_std'): 
+        try:
+            mean_t = classifier.partial_fc.batch_mean.detach().float()
+            std_t = classifier.partial_fc.batch_std.detach().float()
+            
+            # 确保张量是标量
+            if mean_t.numel() > 1:
+                mean_t = mean_t.mean()
+            if std_t.numel() > 1:
+                std_t = std_t.mean()
+                
+            # 直接记录全局的batch_mean和batch_std
+            log_dict['train/adaface_batch_mean'] = float(mean_t.item())
+            log_dict['train/adaface_batch_std'] = float(std_t.item())
+            
+        except Exception as e:
+            print(f"Error occurred while processing classifier statistics: {e}")
+    return log_dict
+
+
+class EarlyStoppingMonitor:
+    def __init__(self, patience=5):
+        self.patience = patience
+        self.best_metric = -float('inf')
+        self.no_improvement_count = 0
+
+    def update(self, metric):
+        """更新指标并检查是否需要早停。"""
+        if metric > self.best_metric:
+            self.best_metric = metric
+            self.no_improvement_count = 0
+            return False
+
+        self.no_improvement_count += 1
+        print(
+            f'EarlyStoppingMonitor: metric={metric:.4f}, '
+            f'best_metric={self.best_metric:.4f}, '
+            f'no_improvement_count={self.no_improvement_count}/{self.patience}'
+        )
+        return self.no_improvement_count >= self.patience
+
+
+class MetricImprovementMonitor:
+    """监控指标是否在连续若干 epoch 内达到最小改进幅度。"""
+
+    def __init__(self, metric_name, patience=5, min_improvement=0.01, mode='max', relative=True):
+        self.metric_name = metric_name
+        self.patience = patience
+        self.min_improvement = min_improvement
+        self.mode = mode
+        self.relative = relative
+        self.best_value = None
+        self.no_improvement_count = 0
+
+    def update(self, value):
+        if self.best_value is None:
+            self.best_value = value
+            self.no_improvement_count = 0
+            print(f"[{self.metric_name}] 初始值: {value:.4f}")
+            return False
+
+        if self.relative:
+            if self.mode == 'max':
+                improved = value > self.best_value * (1 + self.min_improvement)
+            else:
+                improved = value < self.best_value * (1 - self.min_improvement)
+        elif self.mode == 'max':
+            improved = value > self.best_value + self.min_improvement
+        else:
+            improved = value < self.best_value - self.min_improvement
+
+        if improved:
+            old_best = self.best_value
+            self.best_value = value
+            self.no_improvement_count = 0
+            print(f"[{self.metric_name}] 改进: {old_best:.4f} -> {value:.4f}")
+        else:
+            self.no_improvement_count += 1
+            print(
+                f"[{self.metric_name}] 无足够改进: 当前={value:.4f}, "
+                f"最佳={self.best_value:.4f} ({self.no_improvement_count}/{self.patience})"
+            )
+
+        if self.no_improvement_count >= self.patience:
+            print(f"[{self.metric_name}] 早停触发: 连续{self.patience}个epoch无足够改进")
+            return True
+        return False
+
+    def check(self, all_result):
+        if self.metric_name not in all_result:
+            print(f"Warning: Metric '{self.metric_name}' not found in results, keys: {list(all_result.keys())}")
+            return False
+        return self.update(all_result[self.metric_name])
+
+
+def broadcast_should_stop(fabric, should_stop):
+    """广播早停信号到所有 rank，确保 DDP 同步退出。"""
+    return bool(fabric.broadcast(bool(should_stop), src=0))
+
+
+if __name__ == '__main__':
+    cfg: Config = config.init(root)
+    # Benchmark-only controls live in this copied entrypoint, keeping train_opt.py unchanged.
+    schedule_text = os.environ.get('BENCHMARK_LIMIT_SCHEDULE', '').strip()
+    benchmark_limit_schedule = []
+    if schedule_text:
+        try:
+            benchmark_limit_schedule = [int(value) for value in schedule_text.split(',') if value.strip()]
+        except ValueError as error:
+            raise ValueError(
+                f'BENCHMARK_LIMIT_SCHEDULE must be comma-separated integers: {schedule_text}'
+            ) from error
+        if any(value == 0 for value in benchmark_limit_schedule):
+            raise ValueError('BENCHMARK_LIMIT_SCHEDULE values must be non-zero')
+
+    # Bind the process before seeding or any other call that may initialize CUDA.
+    launch_local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    if torch.cuda.is_available():
+        torch.cuda.set_device(launch_local_rank)
+    # print(f"cfg:{cfg}")
+    torch.set_float32_matmul_precision(cfg.trainers.float32_matmul_precision)
+    torch.backends.cudnn.benchmark = True
+    # print('matmul precision', cfg.trainers.float32_matmul_precision)
+    # print('precision', cfg.trainers.precision)
+
+    random_utils.setup_seed(seed=cfg.trainers.seed, cuda_deterministic=False)
+
+    loggers = []
+    csv_logger = CSVLogger(root_dir=cfg.trainers.output_dir, flush_logs_every_n_steps=1)
+    loggers.append(csv_logger)
+    if cfg.trainers.using_wandb:
+        wandb_run_id = str(getattr(cfg.trainers, 'wandb_run_id', '') or '')
+        wandb_kwargs = {
+            'version': wandb_run_id or None,
+            'resume': 'must' if wandb_run_id else 'allow',
+        }
+        if wandb_run_id:
+            print(f'Resuming wandb run: {wandb_run_id}')
+        wandb_logger = WandbLogger(project=cfg.trainers.task, save_dir=cfg.trainers.output_dir,
+                                   name=os.path.basename(cfg.trainers.output_dir),
+                                   log_model=False, **wandb_kwargs)
+        loggers.append(wandb_logger)
+
+    # grad_max_norm?
+    nccl_timeout_min = getattr(cfg.trainers, 'timeout_minutes', 120)
+    ddp_strategy = DDPStrategy(timeout=datetime.timedelta(minutes=nccl_timeout_min))
+    fabric = Fabric(precision=cfg.trainers.precision,
+                    loggers=loggers,
+                    accelerator="auto",
+                    strategy=ddp_strategy,
+                    devices=cfg.trainers.num_gpu)
+    
+    
+    fabric.seed_everything(cfg.trainers.seed)
+    if cfg.trainers.num_gpu == 1:
+        fabric.launch()
+    fabric.setup_dataloader_from_dataset = partial(setup_dataloader_from_dataset, fabric=fabric, seed=cfg.trainers.seed)
+
+    cfg.trainers.local_rank = fabric.local_rank
+    cfg.trainers.world_size = fabric.world_size
+    if launch_local_rank != fabric.local_rank:
+        raise RuntimeError(
+            f"LOCAL_RANK mismatch: launcher={launch_local_rank}, fabric={fabric.local_rank}"
+        )
+    # print = fabric.print
+
+    # MLflow: 仅 rank 0 启动 run 并记录超参数 (离线 SQLite, 无需启动服务)
+    if fabric.local_rank == 0:
+        mlflow_db_path = os.path.join(cfg.trainers.output_dir, "mlflow.db")
+        mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
+        mlflow.set_experiment(cfg.trainers.task)
+        mlflow_run = mlflow.start_run(run_name=os.path.basename(cfg.trainers.output_dir))
+        mlflow_params = {
+            "model": cfg.models.yaml_path,
+            "loss": cfg.losses.name if hasattr(cfg.losses, 'name') else str(cfg.losses),
+            "optimizer": cfg.optims.optimizer,
+            "lr": cfg.optims.lr,
+            "batch_size": cfg.trainers.batch_size,
+            "num_gpu": cfg.trainers.num_gpu,
+            "precision": cfg.trainers.precision,
+            "dataset": cfg.dataset.rec if hasattr(cfg.dataset, 'rec') else str(cfg.dataset),
+            "peft": cfg.pefts.method if hasattr(cfg.pefts, 'method') else "none",
+            "num_epoch": cfg.optims.num_epoch,
+        }
+        mlflow.log_params(mlflow_params)
+
+    # get model
+    model = get_model(cfg.models, cfg.trainers.task)
+
+    train_transform = model.make_train_transform()
+    test_transform = model.make_test_transform()
+
+    # get dataloader
+    dataset, label_mapping = get_train_dataset(cfg.dataset, train_transform, cfg.data_augs, local_rank=cfg.trainers.local_rank)
+    dataloader = fabric.setup_dataloader_from_dataset(dataset=dataset,
+                                                      is_train=True,
+                                                      batch_size=cfg.trainers.batch_size,
+                                                      num_workers=cfg.trainers.num_workers)
+    cfg.trainers.total_batch_size = cfg.trainers.batch_size * cfg.trainers.world_size
+    full_batch_length = len(dataloader.dataset) // cfg.trainers.total_batch_size
+    if benchmark_limit_schedule:
+        batch_length = sum(
+            full_batch_length if value < 0 else value
+            for value in benchmark_limit_schedule
+        )
+    else:
+        batch_length = full_batch_length if cfg.trainers.limit_num_batch <= 0 else cfg.trainers.limit_num_batch
+    if benchmark_limit_schedule:
+        first_limit = benchmark_limit_schedule[0]
+        first_epoch_batches = full_batch_length if first_limit < 0 else first_limit
+        cfg.trainers.warmup_step = first_epoch_batches * cfg.optims.warmup_epoch
+        # The source scheduler state is restored later. Construction still
+        # requires a positive post-warmup interval for short benchmark runs.
+        cfg.trainers.total_step = max(
+            batch_length,
+            cfg.trainers.warmup_step + first_epoch_batches,
+        )
+    else:
+        cfg.trainers.warmup_step = batch_length * cfg.optims.warmup_epoch
+        cfg.trainers.total_step = batch_length * cfg.optims.num_epoch
+    if fabric.local_rank == 0:
+        visualize_dataset(dataloader, os.path.join(cfg.trainers.output_dir, 'train_data.png'))
+
+
+    # get classifier
+    margin_loss_fn = get_margin_loss(cfg.losses)
+
+    extra_classes = 0
+    classifier = get_classifier(cfg.classifiers,
+                                margin_loss_fn=margin_loss_fn,
+                                model_cfg=cfg.models,
+                                num_classes=cfg.dataset.num_classes+extra_classes,
+                                rank=fabric.local_rank,
+                                world_size=fabric.world_size)
+
+    # get aligner
+    aligner = get_aligner(cfg.aligners)
+
+    # apply peft if needed
+    model, classifier = apply_peft(cfg.pefts, model=model, classifier=classifier, data_cfg=cfg.dataset, label_mapping=label_mapping)
+    # channels_last 加速卷积
+    model = model.to(memory_format=torch.channels_last)
+    # torch.compile 编译加速 (在DDP包装前compile, PyTorch 2.12推荐)
+    model = torch.compile(model, dynamic=False)
+
+    # get optimizer
+    optimizer = make_optimizer(cfg, model, classifier, aligner)
+    lr_scheduler = make_scheduler(cfg, optimizer)
+
+    # prepare accelerator
+    if model.has_trainable_params():
+        model, optimizer = fabric.setup(model, optimizer)
+    else:
+        model = model.to(fabric.device)
+        dummy_model = torch.nn.Linear(1, 1).to(fabric.device)
+        dummy_model, optimizer = fabric.setup(dummy_model, optimizer)
+    if classifier is not None:
+        if classifier.apply_ddp:
+            classifier = fabric.setup(classifier)
+        else:
+            classifier = classifier.to(fabric.device)  # no ddp as it divides fc into multiple GPUs
+    if aligner.has_trainable_params():
+        aligner = fabric.setup(aligner)
+    elif aligner is not None:
+        aligner = aligner.to(fabric.device)
+
+
+    verify_ddp_weights_equal(model)
+    if classifier is not None:
+        verify_ddp_weights_equal(classifier)
+
+    # make train pipe (after accelerator setup)
+    train_pipeline = pipeline_from_config(cfg.pipelines, model, classifier, aligner, optimizer, lr_scheduler)
+    train_pipeline.integrity_check(dataloader.dataset)
+    
+ 
+    # make inference pipe (after accelerator setup)
+    eval_pipeline = pipeline_from_name(cfg.pipelines.eval_pipeline_name, model, aligner)
+    eval_pipeline.integrity_check(dataloader.dataset.color_space)
+
+    # External evaluation constructs evaluators in the child process.
+    evaluators = []
+    if not cfg.trainers.external_eval:
+        for name, info in cfg.evaluations.per_epoch_evaluations.items():
+            eval_data_path = os.path.join(cfg.evaluations.data_root, info.path)
+            eval_type = info.evaluation_type
+            eval_batch_size = info.batch_size * 4
+            eval_num_workers = info.num_workers
+            evaluator = get_evaluator_by_name(eval_type=eval_type, name=name, eval_data_path=eval_data_path,
+                                              transform=eval_pipeline.make_test_transform(),
+                                              fabric=fabric, batch_size=eval_batch_size, num_workers=eval_num_workers)
+            evaluator.integrity_check(info.color_space, eval_pipeline.color_space)
+            evaluator.config = info
+            evaluators.append(evaluator)
+
+    # copy project files
+    if fabric.local_rank == 0:
+        code_dir = os.path.dirname(os.path.abspath(__file__))
+        os_utils.copy_project_files(code_dir, cfg.trainers.output_dir)
+        omegaconf.OmegaConf.save(cfg, os.path.join(cfg.trainers.output_dir, 'config.yaml'))
+        os.makedirs(os.path.join(cfg.trainers.output_dir, 'lightning_logs'), exist_ok=True)
+
+    # train
+    step = train_pipeline.step
+    n_images_seen = train_pipeline.n_images_seen
+    n_epochs = cfg.optims.num_epoch - train_pipeline.start_epoch
+    print(f"start at {train_pipeline.start_epoch} and training for {n_epochs} epochs")
+    is_best_tracker = IsBestTracker(fabric)
+
+    early_stopping = EarlyStoppingMonitor(patience=10)
+    improvement_monitors = [
+        MetricImprovementMonitor(
+            metric_name='work_0605_3t/tpir_at_far_1e-10',
+            patience=10,
+            min_improvement=0.005,
+            mode='max',
+            relative=True,
+        ),
+    ]
+    loss_improvement_monitor = MetricImprovementMonitor(
+        metric_name='train/mean_loss',
+        patience=10,
+        min_improvement=0.1,
+        mode='min',
+        relative=False,
+    )
+
+    benchmark_eval_checkpoint = str(
+        getattr(cfg.trainers, 'benchmark_eval_checkpoint', '') or ''
+    )
+    if benchmark_eval_checkpoint:
+        if not cfg.trainers.external_eval:
+            raise ValueError('benchmark_eval_checkpoint requires trainers.external_eval=True')
+        if not os.path.isdir(benchmark_eval_checkpoint):
+            raise FileNotFoundError(
+                f'benchmark eval checkpoint not found: {benchmark_eval_checkpoint}'
+            )
+        if fabric.local_rank == 0:
+            print(
+                'Benchmark mode: skip checkpoint writes and evaluate existing checkpoint:',
+                benchmark_eval_checkpoint,
+            )
+    
+    tic = time.time()
+    epoch = train_pipeline.start_epoch
+    for epoch in range(train_pipeline.start_epoch, cfg.optims.num_epoch):
+        epoch_start_time = time.time()
+        epoch_loss_sum = torch.zeros(1, device=fabric.device, dtype=torch.float32)
+        epoch_loss_count = 0
+        param_cache_backbone = {}
+        param_cache_classifier = {}
+        
+        train_pipeline.train()
+        if hasattr(train_pipeline, 'set_epoch'):
+            train_pipeline.set_epoch(epoch)
+        
+        set_epoch(dataloader, epoch, cfg)
+        schedule_index = epoch - train_pipeline.start_epoch
+        if benchmark_limit_schedule:
+            if schedule_index >= len(benchmark_limit_schedule):
+                raise ValueError(
+                    'BENCHMARK_LIMIT_SCHEDULE is shorter than requested epochs: '
+                    f'index={schedule_index}, length={len(benchmark_limit_schedule)}'
+                )
+            configured_limit = benchmark_limit_schedule[schedule_index]
+            batch_length = len(dataloader) if configured_limit < 0 else configured_limit
+        else:
+            batch_length = len(dataloader) if cfg.trainers.limit_num_batch <= 0 else cfg.trainers.limit_num_batch
+        progress_disabled = cfg.trainers.local_rank != 0
+        pbar = tqdm(total=batch_length, disable=progress_disabled, file=sys.stderr)
+        if cfg.trainers.local_rank == 0:
+            print('\nRun Name', os.path.basename(cfg.trainers.output_dir))
+        for batch_idx, batch in enumerate(dataloader):
+
+            if batch_idx >= batch_length:
+                break
+
+            if cfg.trainers.mock_lr_run:
+                loss = 0
+            else:
+                is_accumulating = batch_idx % cfg.trainers.gradient_acc != 0
+                with fabric.no_backward_sync(model if model.has_trainable_params() else dummy_model,
+                                             enabled=is_accumulating):
+                    with fabric.autocast():
+                        loss = train_pipeline(batch)
+                        fabric.backward(loss)
+                if not is_accumulating:
+                    if batch_idx % 200 == 0:
+                        # ========== 分别计算 backbone 和 classifier 的 grad_norm ==========
+                        grad_norm_backbone = get_norm(model)
+                        grad_norm_classifier = get_norm(classifier) if classifier is not None else 0.0
+
+                        # ========== 缓存参数（分开缓存） ==========
+                        param_cache_backbone = {
+                            name: p.data.clone()
+                            for name, p in model.named_parameters() if p.requires_grad
+                        }
+                        param_cache_classifier = {}
+                        if classifier is not None:
+                            param_cache_classifier = {
+                                name: p.data.clone()
+                                for name, p in classifier.named_parameters() if p.requires_grad
+                            }
+                    # 源代码的梯度裁剪
+                    fabric.clip_gradients(model, optimizer, max_norm=cfg.optims.max_grad_norm)
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+
+            scheduler_step(lr_scheduler, step)
+            last_lr = get_last_lr(optimizer)
+            
+            # 记录loss (GPU上累积, 不触发sync)
+            epoch_loss_sum.add_(loss.detach().float())
+            epoch_loss_count += 1
+            
+            n_images_seen += cfg.trainers.total_batch_size
+            step += 1
+
+            if batch_idx % 200 == 0:
+                # ========== 分别计算 update_ratio ==========
+                update_ratio_backbone = compute_update_ratio(model, param_cache_backbone)
+                update_ratio_classifier = compute_update_ratio(classifier, param_cache_classifier) if classifier is not None else 0.0
+
+                log_dict = {}
+                log_dict['epoch'] = epoch
+                log_dict['step'] = step
+                log_dict['n_images_seen'] = n_images_seen
+                log_dict['train/loss'] = loss
+                log_dict['train/lr'] = last_lr
+                log_dict['trainer/global_step'] = step
+                log_dict['trainer/epoch'] = epoch
+                log_dict['train/coreface_active'] = float(getattr(train_pipeline, 'coreface_active', False))
+                
+                log_dict['train/mean_loss'] = (epoch_loss_sum / epoch_loss_count).item() if epoch_loss_count > 0 else 0.0
+                log_dict['train/grad_norm_backbone']= grad_norm_backbone
+                log_dict['train/grad_norm_classifier']= grad_norm_classifier
+                log_dict['train/update_ratio_backbone']= update_ratio_backbone
+                log_dict['train/update_ratio_classifier']= update_ratio_classifier
+                
+                log_dict = log_classifier(classifier, log_dict)
+                log_dict.update(getattr(train_pipeline, 'last_losses', {}))
+
+                fabric.log_dict(log_dict, step=step)
+                # MLflow 记录训练指标 (仅 rank 0, 异步写入)
+                if fabric.local_rank == 0:
+                    mlflow_metrics = {}
+                    for k, v in log_dict.items():
+                        if isinstance(v, torch.Tensor):
+                            mlflow_metrics[k] = v.detach().cpu().item()
+                        elif isinstance(v, (int, float)):
+                            mlflow_metrics[k] = float(v)
+                    _mlflow_queue.put((mlflow_metrics, step))
+
+            speed = cfg.trainers.batch_size / (time.time() - tic)
+            speed_total = speed * fabric.world_size
+            if batch_idx % 10 == 0:
+                # 每 10 batch 更新 pbar, 避免每 batch 都 format tensor (.item() sync)
+                loss_val = loss.item()
+                pbar.set_description(f"Epoch {epoch} | Step {step} | Batch {batch_idx} | Speed {speed_total:.0f} | LR {last_lr:.5f} | Loss {loss_val:.4f}")
+            pbar.update(1)
+            tic = time.time()
+        pbar.close()
+        
+        # 每个epoch保存模型。benchmark 模式复用已有 checkpoint，避免写入一次性大文件。
+        fabric.barrier()
+        if benchmark_eval_checkpoint:
+            save_dir = benchmark_eval_checkpoint
+        else:
+            # Step is persisted in pipeline.pt; keep directory names stable and
+            # keyed only by epoch for simpler discovery and downstream evaluation.
+            save_dir = os.path.join(cfg.dataset.model_save_dir, os.path.basename(cfg.trainers.output_dir), 'checkpoints_every_epoch', f'epoch:{epoch}')
+            train_pipeline.save_pipelines_and_configs(save_dir, fabric, train_pipeline, cfg, epoch, step, n_images_seen)
+        fabric.barrier()
+
+        avg_epoch_loss = (epoch_loss_sum / epoch_loss_count).item() if epoch_loss_count > 0 else float('inf')
+
+        # validation (skip when only classifier is training — model embeddings unchanged)
+        if cfg.evaluations.eval_every_n_epochs > 0 and model.has_trainable_params():
+            print('Evaluation Started')
+            eval_start_time = time.time()
+            should_evaluate = (
+                epoch % cfg.evaluations.eval_every_n_epochs == 0
+                or epoch == (cfg.optims.num_epoch - 1)
+                or epoch + 1 in cfg.optims.lr_milestones
+            )
+            all_result = {}
+            if should_evaluate and cfg.trainers.external_eval:
+                # Release epoch-local tensors before the child loads a second model copy.
+                batch = None
+                loss = None
+                param_cache_backbone.clear()
+                param_cache_classifier.clear()
+                gc.collect()
+                with torch.cuda.device(fabric.device):
+                    torch.cuda.empty_cache()
+                fabric.barrier()
+                all_result = run_external_torch_eval(
+                    fabric=fabric,
+                    cfg=cfg,
+                    checkpoint_dir=save_dir,
+                    epoch=epoch,
+                )
+            elif should_evaluate:
+                for evaluator in evaluators:
+                    print(f"Evaluating {evaluator.name}")
+                    result = evaluator.evaluate(eval_pipeline, epoch=epoch, step=step, n_images_seen=n_images_seen)
+                    all_result.update({evaluator.name + "/" + k: v for k, v in result.items()})
+            eval_time = (time.time() - eval_start_time) / 60
+            if fabric.local_rank == 0:
+                print(f'Evaluation Time: {eval_time:.2f} mins')
+            
+            
+            # Combined evaluations (合并多源评估)
+            combined_config = None if cfg.trainers.external_eval else getattr(cfg.evaluations, 'combined_evaluations', None)
+            if combined_config:
+                # 所有 rank 都打印，确保日志可见
+                print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
+                if fabric.local_rank == 0:
+                    import datetime
+                    # 延长 NCCL 超时，防止合并计算耗时过长导致其他 rank timeout
+                    old_timeout = os.environ.get('NCCL_TIMEOUT', None)
+                    os.environ['NCCL_ASYNC_ERROR_HANDLING'] = '1'
+
+                    evaluators_dict = {e.name: e for e in evaluators}
+                    combined_start = time.time()
+                    combined_result = run_combined_evaluations(evaluators_dict, combined_config)
+                    all_result.update(combined_result)
+                    print(f'合并评估完成，耗时: {(time.time() - combined_start) / 60:.2f} mins')
+                fabric.barrier()
+
+            if fabric.local_rank == 0:
+                if all_result:
+                    os.makedirs(os.path.join(cfg.trainers.output_dir, 'result'), exist_ok=True)
+                    save_result = pd.DataFrame(pd.Series(all_result), columns=['val'])
+                    save_result.to_csv(os.path.join(cfg.trainers.output_dir, f'result/eval_{epoch}_{step}.csv'))
+                    mean, summary_dict = summary(save_result, epoch, step, n_images_seen)
+                    fabric.log_dict(summary_dict)
+                    # MLflow 记录评估指标
+                    mlflow_eval = {k.replace("@", "_at_"): float(v) for k, v in summary_dict.items() if isinstance(v, (int, float))}
+                    _mlflow_queue.put((mlflow_eval, step))
+                    summary_result = pd.DataFrame(pd.Series(summary_dict), columns=['val'])
+                    summary_result.to_csv(os.path.join(cfg.trainers.output_dir, f'result/eval_summary_{epoch}_{step}.csv'))
+                else:
+                    print('Skipped evaluation. So best is not updated')
+                    mean = is_best_tracker.prev_best_metric
+            else:
+                mean = -1.0
+            is_best_tracker.set_is_best(mean)
+            if fabric.local_rank == 0:
+                fabric.log_dict({'is_best': float(is_best_tracker.is_best())})
+                print(f'Epoch {epoch} | Step {step} | Best {is_best_tracker.is_best()}')
+                if all_result:
+                    print(summary_result.round(2).to_markdown())
+
+            # CoreFace 多阶段流程临时关闭早停；其他训练可通过配置继续使用。
+            if cfg.trainers.early_stopping_enabled:
+                should_stop = False
+                early_stop_reasons = []
+                if fabric.local_rank == 0:
+                    if loss_improvement_monitor.update(avg_epoch_loss):
+                        print(
+                            f"早停触发: train/mean_loss 连续{loss_improvement_monitor.patience}个epoch"
+                            f"未降低{loss_improvement_monitor.min_improvement}"
+                        )
+                        should_stop = True
+                        early_stop_reasons.append('train/mean_loss')
+                    if early_stopping.update(mean):
+                        print(
+                            f"Early stopping triggered after {early_stopping.patience} "
+                            "epochs without improvement."
+                        )
+                        should_stop = True
+                        early_stop_reasons.append('summary_mean')
+                    if all_result:
+                        for monitor in improvement_monitors:
+                            if monitor.check(all_result):
+                                print(
+                                    f"早停触发: {monitor.metric_name} 连续{monitor.patience}个epoch无足够改进"
+                                )
+                                should_stop = True
+                                early_stop_reasons.append(monitor.metric_name)
+
+                if broadcast_should_stop(fabric, should_stop):
+                    if fabric.local_rank == 0:
+                        stage_output_dir = os.path.dirname(os.path.dirname(save_dir))
+                        marker_path = os.path.join(stage_output_dir, 'EARLY_STOPPED')
+                        with open(marker_path, 'w', encoding='utf-8') as marker_file:
+                            json.dump({
+                                'epoch': epoch,
+                                'step': step,
+                                'checkpoint': save_dir,
+                                'reasons': early_stop_reasons,
+                            }, marker_file, ensure_ascii=False, indent=2)
+                        print(f"早停标记已写入: {marker_path}")
+                    fabric.barrier()
+                    break
+
+            # save model
+            
+            if benchmark_eval_checkpoint:
+                print('Evaluation Finished; benchmark mode skipped checkpoint save')
+            else:
+                train_pipeline.save(fabric, train_pipeline, cfg, epoch, step, n_images_seen,
+                                    is_best=is_best_tracker.is_best())
+                print('Evaluation Finished and Model Saved')
+
+        epoch_time = (time.time() - epoch_start_time) / 60
+        print(f'Epoch Time: {epoch_time:.2f} mins')
+
+        torch.cuda.empty_cache()
+    # load best model and do final eval
+    is_best_path = os.path.join(cfg.trainers.output_dir, 'checkpoints', 'best')
+    epoch = epoch + 1
+    step = step + 1
+    n_images_seen = n_images_seen + 1
+    if os.path.exists(is_best_path) and cfg.trainers.skip_final_eval is False:
+        fabric.barrier()
+        time.sleep(fabric.local_rank * 5)  # prevent concurrent file access
+        eval_pipeline.model.load_state_dict_from_path(os.path.join(is_best_path, 'model.pt'))
+        print('Final Evaluation Started')
+
+        # evaluation callbacks
+        cfg.evaluations = config.load_yaml('final', directory='evaluations')
+        evaluators = []
+        for name, info in cfg.evaluations.per_epoch_evaluations.items():
+            eval_data_path = os.path.join(cfg.evaluations.data_root, info.path)
+            eval_type = info.evaluation_type
+            eval_batch_size = info.batch_size
+            eval_num_workers = info.num_workers
+            evaluator = get_evaluator_by_name(eval_type=eval_type, name=name, eval_data_path=eval_data_path,
+                                              transform=eval_pipeline.make_test_transform(),
+                                              fabric=fabric, batch_size=eval_batch_size, num_workers=eval_num_workers)
+            evaluator.integrity_check(info.color_space, eval_pipeline.color_space)
+            evaluators.append(evaluator)
+
+
+        all_result = {}
+        for evaluator in evaluators:
+            print(f"Evaluating {evaluator.name}")
+            result = evaluator.evaluate(eval_pipeline, epoch=epoch, step=step, n_images_seen=n_images_seen)
+            all_result.update({evaluator.name + "/" + k: v for k, v in result.items()})
+
+        # Combined evaluations (合并多源评估)
+        combined_config = getattr(cfg.evaluations, 'combined_evaluations', None)
+        if combined_config:
+            print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
+            if fabric.local_rank == 0:
+                evaluators_dict = {e.name: e for e in evaluators}
+                combined_start = time.time()
+                combined_result = run_combined_evaluations(evaluators_dict, combined_config)
+                all_result.update(combined_result)
+                print(f'合并评估完成，耗时: {(time.time() - combined_start) / 60:.2f} mins')
+            fabric.barrier()
+
+        if fabric.local_rank == 0:
+            os.makedirs(os.path.join(cfg.trainers.output_dir, 'result'), exist_ok=True)
+            save_result = pd.DataFrame(pd.Series(all_result), columns=['val'])
+            save_result.to_csv(os.path.join(cfg.trainers.output_dir, f'result/eval_best.csv'))
+            mean, summary_dict = summary(save_result, epoch, step, n_images_seen)
+            summary_dict = {k.replace('summary/', 'final/'): v for k, v in summary_dict.items()}
+            # round to 2 decimal places
+            summary_dict = {k: np.round(v, 2) for k, v in summary_dict.items()}
+            fabric.log_dict(summary_dict)
+            # MLflow 记录最终评估指标
+            mlflow_final = {k.replace("@", "_at_"): float(v) for k, v in summary_dict.items() if isinstance(v, (int, float, np.floating))}
+            _mlflow_queue.put((mlflow_final, step))
+            pd.DataFrame(pd.Series(summary_dict), columns=['val']).to_csv(
+                os.path.join(cfg.trainers.output_dir, f'result/eval_summary_best.csv'))
+    else:
+        print('Skip final evaluation')
+
+    # close
+    if fabric.local_rank == 0:
+        # 等待 MLflow 异步队列写完再关闭
+        _mlflow_queue.put(None)
+        _mlflow_thread.join(timeout=30)
+        mlflow.end_run()
+        for logger in fabric.loggers:
+            if hasattr(logger, 'experiment') and hasattr(logger.experiment, 'finish'):
+                logger.experiment.finish()
+    print('done')
