@@ -67,6 +67,8 @@ CoreFace 的 epoch 12 综合分为 `77.081302`，与 epoch 13 和 14 非常接�
 
 与旧 CoreFace-SGD20 e14 的差值为：开源 `+0.189`、TinyFace `+2.066`、IJBC `-0.052`、1201 `-0.832`、3T `-0.903`、Glint `+0.660`、Enhance `-3.238`，综合分由 `77.092370` 降至 `76.660443`（`-0.431927`）。因此它确实改善了公开识别、TinyFace 和 Glint，但没有解决 CoreFace 的跨私有集稳定性问题，Enhance 退化抵消了公开集收益。
 
+Glint 均值的提升主要来自 FAR `1e-10` 由旧 CoreFace 的 `34.397` 提升到 `40.941`（`+6.544`）；FAR `1e-6` 至 `1e-9` 分别下降 `0.471`、`0.884`、`1.318`、`0.567`。该变化符合 SubCenter 强化极低 FAR 的特点，但不是 Glint 全档位的普遍提升。1201 五档全部下降；3T 的下降随 FAR 降低而扩大，FAR `1e-10` 下降 `2.310`；Enhance 五档下降约 `2.4` 至 `3.8`。
+
 将新增模型作为第五个候选时，当前排名为：QGFace6 e9 (`77.312`) > CoreFace-SGD20 e14 (`77.092`) > CoreFace-SubCenter-S4 e18 (`76.660`) > SubCenter e14 (`75.966`) > AdaFace e12 (`75.440`)。
 
 | 模型 checkpoint | 开源 | TinyFace | IJBC | 1201 | 3T | Glint | Enhance |
@@ -91,15 +93,21 @@ CoreFace 的 epoch 12 综合分为 `77.081302`，与 epoch 13 和 14 非常接�
 - 官方 IJBC 第一；3T 前四级 FAR 第一；Glint 前四级 FAR 第一；1201 与 Enhance 通常稳定在第二梯队。
 - TinyFace Rank-1 为 `71.137`，比其余三者低约 `1.7` 至 `1.9` 个百分点，是最明显短板。IJBC-001 极低 FAR 不如 QGFace6。
 
+### CoreFace-SubCenter-S4 e18
+
+- 开源分与 TinyFace 在五个候选中第一，明显修复了旧 CoreFace 的 TinyFace 短板；Glint 五档均值第二，仅略低于 SubCenter。
+- Glint 优势集中在 FAR `1e-10`，前四档仍低于旧 CoreFace，说明 SubCenter 的极低 FAR 特性被保留下来。
+- 1201 和 3T 在五个候选中最低，Enhance 低于 QGFace6 和旧 CoreFace；当前权重下不如直接使用旧 CoreFace-SGD20。
+
 ### SubCenter e14
 
-- 综合第三；官方 IJBC 接近 CoreFace，公开集表现强，Glint 五档均值第一。
+- 综合第四；官方 IJBC 接近 CoreFace，公开集表现强，Glint 五档均值第一。
 - Glint 的优势主要来自 FAR `1e-10 = 41.982`；前四级 FAR 实际由 CoreFace 领先。
 - Enhance 最低，3T 五级 FAR 都最后，1201 整体偏低，跨域稳定性不及 QGFace6 与 CoreFace。
 
 ### AdaFace e12
 
-- 综合第四，但开源集和 TinyFace 均为第一，常规公开人脸识别能力强。
+- 综合第五；在原四模型中开源集和 TinyFace 均为第一，但已被新增 CoreFace-SubCenter-S4 超过，常规公开人脸识别能力仍然较强。
 - Glint 居中，官方 IJBC 与第一名接近。
 - 困难私有集是主要短板：IJBC-001 的 FAR `1e-6`、`5e-7` 最低，Enhance 明显低于 QGFace6 与 CoreFace，1201 和 3T 无明显优势。
 
