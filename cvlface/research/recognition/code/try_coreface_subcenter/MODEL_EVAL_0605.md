@@ -1,8 +1,8 @@
 # 0605 模型评估与 Checkpoint 记录
 
-记录日期：2026-08-04
+初始记录日期：2026-08-04；新增模型更新：2026-08-10
 
-本文沉淀 0605 实验中 AdaFace、QGFace6、CoreFace-SGD20、SubCenter 的横向评估结论、可用 checkpoint 与推理约定。它用于后续实验和对话的上下文，不能替代从 W&B 原始记录重新计算的结果。
+本文沉淀 0605 实验中 AdaFace、QGFace6、CoreFace-SGD20、SubCenter 以及新增 CoreFace-SubCenter-S4 的横向评估结论、可用 checkpoint 与推理约定。它用于后续实验和对话的上下文，不能替代从 W&B 原始记录重新计算的结果。
 
 ## 结论适用范围
 
@@ -36,15 +36,44 @@ IJBC分 = mean(官方 IJBC, IJBC-001)
 | --- | ---: | ---: | ---: | ---: |
 | QGFace6 | 9 | 77.311813 | 0 | 77.260480 |
 | CoreFace-SGD20 | 14 | 77.092370 | 13 | 77.081334 |
+| CoreFace-SubCenter-S4 | 18 | 76.660443 | 19 | 76.619094 |
 | SubCenter | 14 | 75.966277 | 12 | 75.929335 |
 | AdaFace | 12 | 75.440411 | 9 | 75.395816 |
 
 CoreFace 的 epoch 12 综合分为 `77.081302`，与 epoch 13 和 14 非常接近。
 
+### 新增 CoreFace-SubCenter-S4
+
+新增组合使用两个不同来源的 run 合并同一 epoch：
+
+- 训练期公开集与 TinyFace：`try_coreface_subcenter/sedie2xi`，run 名称 `coreface_subcenter_s4_joint_after_s2_sgd20_0605_08-06_0`。
+- 独立测试集：`work_0605_test/4jsc6knz`，run 名称 `coreface_subcenter_s4`。
+
+按每个模型选择自己的最优 epoch，新增模型最佳为 **epoch 18，综合分 `76.660443`**。逐 epoch 综合分如下：
+
+| epoch | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 综合分 | 73.198 | 74.021 | 74.490 | 74.698 | 75.210 | 75.312 | 75.168 | 75.444 | 75.667 | 75.894 |
+
+| epoch | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | **18** | 19 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 综合分 | 75.995 | 76.017 | 76.165 | 76.234 | 76.276 | 76.537 | 76.551 | 76.595 | **76.660** | 76.619 |
+
+最佳 epoch 18 的分项结果：
+
+| 开源 | TinyFace | IJBC | 1201 | 3T | Glint | Enhance |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 96.228 | 73.203 | 75.755 | 72.763 | 93.424 | 78.345 | 52.577 |
+
+与旧 CoreFace-SGD20 e14 的差值为：开源 `+0.189`、TinyFace `+2.066`、IJBC `-0.052`、1201 `-0.832`、3T `-0.903`、Glint `+0.660`、Enhance `-3.238`，综合分由 `77.092370` 降至 `76.660443`（`-0.431927`）。因此它确实改善了公开识别、TinyFace 和 Glint，但没有解决 CoreFace 的跨私有集稳定性问题，Enhance 退化抵消了公开集收益。
+
+将新增模型作为第五个候选时，当前排名为：QGFace6 e9 (`77.312`) > CoreFace-SGD20 e14 (`77.092`) > CoreFace-SubCenter-S4 e18 (`76.660`) > SubCenter e14 (`75.966`) > AdaFace e12 (`75.440`)。
+
 | 模型 checkpoint | 开源 | TinyFace | IJBC | 1201 | 3T | Glint | Enhance |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | QGFace6 e9 | 95.833 | 72.881 | 76.007 | 74.288 | 94.281 | 68.187 | 64.838 |
 | CoreFace-SGD20 e14 | 96.039 | 71.137 | 75.807 | 73.595 | 94.327 | 77.685 | 55.815 |
+| CoreFace-SubCenter-S4 e18 | 96.228 | 73.203 | 75.755 | 72.763 | 93.424 | 78.345 | 52.577 |
 | SubCenter e14 | 96.100 | 72.961 | 75.898 | 72.963 | 93.627 | 78.591 | 47.356 |
 | AdaFace e12 | 96.172 | 73.069 | 75.331 | 73.354 | 93.922 | 74.076 | 48.316 |
 
@@ -96,6 +125,13 @@ CoreFace 的 epoch 12 综合分为 `77.081302`，与 epoch 13 和 14 非常接�
 | SubCenter | `subcenter_s4_joint04_0605_trt` | `1tdugpwj` |
 | CoreFace-SGD20 e0-e7 | `coreface_sgd20_s4_0_7` | `55qv2v32` |
 | CoreFace-SGD20 e8-e14 | `coreface_sgd20_s4_8_14` | `4qlyi1qt` |
+| CoreFace-SubCenter-S4 e0-e19 | `coreface_subcenter_s4` | `4jsc6knz` |
+
+新增组合的训练期公开评估 run：
+
+| 模型 | Run 名称 | Run ID |
+| --- | --- | --- |
+| CoreFace-SubCenter-S4 e0-e19 | `coreface_subcenter_s4_joint_after_s2_sgd20_0605_08-06_0` | `sedie2xi` |
 
 ## Checkpoint 位置
 
@@ -118,6 +154,10 @@ CoreFace 的 epoch 12 综合分为 `77.081302`，与 epoch 13 和 14 非常接�
 | AdaFace e12 | `/smb_share/zkj_data/model/model_eval/adaface_0605_12` |
 
 复制后已使用 `rsync --dry-run` 验证源目录和目标目录无差异。
+
+新增 CoreFace-SubCenter-S4 e18 的源 checkpoint（尚未复制到上述归档目录）：
+
+`/data1/dataset_0605/train_output/coreface_subcenter_s4_joint_after_s2_sgd20_0605_08-06_0/checkpoints_every_epoch/epoch:18`
 
 ## 共同的特征提取约定
 
