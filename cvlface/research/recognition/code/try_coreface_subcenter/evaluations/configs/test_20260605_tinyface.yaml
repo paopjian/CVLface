@@ -1,0 +1,12 @@
+data_root: '/data1/dataset_0605'
+eval_every_n_epochs: 1
+
+# Isolate TinyFace while preserving the same batch size and worker count used
+# by the training-time external evaluation.
+per_epoch_evaluations:
+  tinyface:
+    path: facerec_val/tinyface_aligned_pad_0.1
+    evaluation_type: tinyface
+    color_space: RGB
+    batch_size: 256
+    num_workers: 4

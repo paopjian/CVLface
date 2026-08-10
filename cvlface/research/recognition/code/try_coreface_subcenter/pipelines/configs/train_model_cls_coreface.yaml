@@ -1,0 +1,13 @@
+name: 'TrainModelClsPipeline'
+resume: ${trainers.resume}
+eval_pipeline_name: 'infer_model_pipeline'
+
+# CoreFace / ContraFace schedule. Set coreface_enabled=false for AdaFace only.
+coreface_enabled: true
+coreface_start_epoch: 8
+coreface_dropout: 0.4
+coreface_dropout2: 0.6
+coreface_weight1: 0.5
+coreface_weight2: 0.5
+coreface_weight_contrast: 0.05
+coreface_weight_contrast_reverse: 0.0

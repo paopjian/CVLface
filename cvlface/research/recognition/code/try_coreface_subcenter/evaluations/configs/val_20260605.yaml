@@ -1,0 +1,54 @@
+data_root: '/data1/dataset_0605'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "work_0605_3t": {
+    'path': 'val_3t',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+  "work_0605_enhance": {
+    'path': 'val_enhance',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+  "work_0605_glint": {
+    'path': 'val_glint',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+   "cplfw": {
+    'path': 'facerec_val/cplfw',
+    'evaluation_type': 'verification',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 4
+  },
+
+  "agedb_30": {
+    'path': 'facerec_val/agedb_30',
+    'evaluation_type': 'verification',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 4
+  },
+  "tinyface": {
+    'path': 'facerec_val/tinyface_aligned_pad_0.1',
+    'evaluation_type': 'tinyface',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 4
+  },
+    "calfw": {
+    'path': 'facerec_val/calfw',
+    'evaluation_type': 'verification',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 4
+  },
+}
