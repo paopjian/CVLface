@@ -1,0 +1,94 @@
+_wandb:
+    value:
+        cli_version: 0.27.2
+        e:
+            5iz34iqae5ylps8r2wvo7eoisgdnj5ce:
+                codePath: cvlface/research/recognition/code/try_coreface/merge_coreface_s2_wandb.py
+                codePathLocal: merge_coreface_s2_wandb.py
+                cpu_count: 56
+                cpu_count_logical: 112
+                cudaVersion: "12.7"
+                disk:
+                    /:
+                        total: "942328844288"
+                        used: "489645355008"
+                email: kejian.zhao@tsings.cn
+                executable: /root/anaconda3/envs/cvlface/bin/python
+                git:
+                    commit: cf639a25bd7d21b5854c2febc33c3c5e07f138b8
+                    remote: https://github.com/paopjian/CVLface.git
+                gpu: NVIDIA GeForce RTX 4090
+                gpu_count: 8
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-2cb8bce0-477b-430e-cbd2-53801a3117e3
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-6df17921-b112-15fc-6d00-9f9e1ce61199
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-79ee6786-5c13-fbd2-a1c8-4e9ae04b95f2
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-111e1462-2d22-a3b7-dc74-5b0762970d20
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-f5963f91-b8ec-cfbf-1ca4-4e491a507663
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-383adfb1-4ee3-239b-e43c-b94c6c77fd1b
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-db80167d-6fbd-76f9-a9c5-d56e6de0ae0a
+                    - architecture: Ada
+                      cudaCores: 16384
+                      memoryTotal: "25757220864"
+                      name: NVIDIA GeForce RTX 4090
+                      uuid: GPU-54b6d081-93be-3a85-9e7a-e6e1a7cc4f4d
+                host: qingsi
+                memory:
+                    total: "540634615808"
+                os: Linux-5.15.0-185-generic-x86_64-with-glibc2.35
+                program: /root/zhaokj/CVLface/cvlface/research/recognition/code/try_coreface/merge_coreface_s2_wandb.py
+                python: CPython 3.12.13
+                root: /root/zhaokj/CVLface/cvlface/research/recognition/code/try_coreface
+                startedAt: "2026-07-30T07:01:47.631029Z"
+                writerId: 5iz34iqae5ylps8r2wvo7eoisgdnj5ce
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.12.13
+        t:
+            "3":
+                - 2
+                - 7
+                - 13
+                - 15
+                - 16
+                - 62
+            "4": 3.12.13
+            "5": 0.27.2
+            "12": 0.27.2
+            "13": linux-x86_64
