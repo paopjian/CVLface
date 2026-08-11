@@ -1,0 +1,13 @@
+name: 'TrainModelClsPipeline'
+resume: ${trainers.resume}
+eval_pipeline_name: 'infer_model_pipeline'
+
+coreface_enabled: true
+coreface_start_epoch: 8
+coreface_dropout: 0.4
+coreface_dropout2: 0.6
+coreface_weight1: 0.5
+coreface_weight2: 0.5
+coreface_weight_contrast: 0.05
+coreface_weight_contrast_reverse: 0.0
+coreface_shared_subcenter_routing: true

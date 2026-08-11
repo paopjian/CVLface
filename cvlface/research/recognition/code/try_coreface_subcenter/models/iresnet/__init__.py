@@ -39,10 +39,12 @@ class IResNetModel(BaseModel):
         model.eval()
         return model
 
-    def forward(self, x, coreface=False, dropout=None):
+    def forward(self, x, coreface=False, dropout=None, clean_route=False):
         if self.input_color_flip:
             x = x.flip(1)
         if coreface:
+            if clean_route:
+                return self.net.forward_triple(x, dropout=dropout)
             return self.net.forward_double(x, dropout=dropout)
         return self.net(x)
 

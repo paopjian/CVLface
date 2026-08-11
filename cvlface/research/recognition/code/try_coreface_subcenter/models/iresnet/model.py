@@ -291,6 +291,39 @@ class Backbone(Module):
         x2 = self.output_layer[4](x2)
         return x1, x2
 
+    def forward_triple(self, x, dropout=None):
+        """Return a detached clean route feature and two dropout embeddings."""
+        if self.flip:
+            x = x.flip(1)
+        x = self.input_layer(x)
+        x = self.body(x)
+        x = self.output_layer[0](x)
+        x = torch.flatten(x, 1)
+
+        # The route must not update the backbone, FC, or BatchNorm statistics.
+        with torch.no_grad():
+            clean = self.output_layer[3](x.detach())
+            clean_bn = self.output_layer[4]
+            clean = F.batch_norm(
+                clean,
+                clean_bn.running_mean,
+                clean_bn.running_var,
+                weight=clean_bn.weight,
+                bias=clean_bn.bias,
+                training=False,
+                momentum=0.0,
+                eps=clean_bn.eps,
+            )
+
+        probability = self.output_layer[1].p if dropout is None else dropout
+        x1 = F.dropout(x, p=probability, training=True)
+        x2 = F.dropout(x, p=probability, training=True)
+        x1 = self.output_layer[3](x1)
+        x1 = self.output_layer[4](x1)
+        x2 = self.output_layer[3](x2)
+        x2 = self.output_layer[4](x2)
+        return clean, x1, x2
+
 
 
 def IR_18(input_size, output_dim=512, dropout=0.4):
