@@ -153,6 +153,128 @@ class PartialFC_V2(torch.nn.Module):
             ).amax(dim=2).clone()
         return logits
 
+    def _compute_subcenter_logits(self, embeddings, weight):
+        norm_embeddings = normalize(embeddings, dim=1)
+        norm_weight = normalize(weight, dim=1)
+        logits = linear(norm_embeddings, norm_weight)
+        return logits.reshape(
+            embeddings.size(0), weight.size(0) // self.num_subcenters, self.num_subcenters
+        )
+
+    def _gather_embeddings_and_labels(self, local_embeddings, local_labels):
+        local_labels = local_labels.reshape(-1).long()
+        batch_size = local_embeddings.size(0)
+        if self.last_batch_size == 0:
+            self.last_batch_size = batch_size
+        assert self.last_batch_size == batch_size, (
+            f"last batch size do not equal current batch size: {self.last_batch_size} vs {batch_size}"
+        )
+
+        gathered_embeddings = [
+            torch.zeros(
+                (batch_size, self.embedding_size),
+                dtype=local_embeddings.dtype,
+                device=local_embeddings.device,
+            )
+            for _ in range(self.world_size)
+        ]
+        gathered_labels = [
+            torch.zeros(batch_size, dtype=torch.long, device=local_labels.device)
+            for _ in range(self.world_size)
+        ]
+        embeddings = torch.cat(AllGather(local_embeddings, *gathered_embeddings))
+        distributed.all_gather(gathered_labels, local_labels)
+        return embeddings, torch.cat(gathered_labels)
+
+    def _select_weight(self, labels):
+        labels = labels.view(-1, 1)
+        index_positive = (self.class_start <= labels) & (
+            labels < self.class_start + self.num_local
+        )
+        labels[~index_positive] = -1
+        labels[index_positive] -= self.class_start
+        if self.sample_rate < 1:
+            weight = self.sample(labels, index_positive)
+        else:
+            weight = self.weight
+        return labels, weight
+
+    def _apply_margin(self, logits1, logits2, labels, norms):
+        combined_logits = torch.cat([logits1, logits2], dim=0)
+        combined_labels = torch.cat([labels, labels], dim=0)
+        combined_norms = torch.cat([norms, norms], dim=0)
+
+        if isinstance(self.margin_softmax, CombinedMarginLoss):
+            combined_logits = self.margin_softmax(
+                logits=combined_logits, labels=combined_labels
+            )
+        elif isinstance(self.margin_softmax, AdaFaceLoss):
+            combined_logits, batch_mean, batch_std = self.margin_softmax(
+                logits=combined_logits,
+                labels=combined_labels,
+                norms=combined_norms,
+                batch_mean=self.batch_mean,
+                batch_std=self.batch_std,
+            )
+            self.batch_mean.data = batch_mean.data
+            self.batch_std.data = batch_std.data
+        else:
+            raise ValueError('parital FC margin_softmax not supported type')
+        # DistCrossEntropy normalizes logits in place. ``chunk`` would return
+        # two views of the same storage, which autograd forbids modifying.
+        return tuple(logits.clone() for logits in combined_logits.chunk(2, dim=0))
+
+    def forward_coreface_shared_route(
+        self,
+        clean_embeddings: torch.Tensor,
+        view1_embeddings: torch.Tensor,
+        view2_embeddings: torch.Tensor,
+        local_labels: torch.Tensor,
+    ):
+        """Classify two dropout views with one clean, fixed positive subcenter route."""
+        if self.num_subcenters < 2:
+            raise ValueError('shared CoreFace routing requires num_subcenters >= 2')
+        if clean_embeddings.shape != view1_embeddings.shape or view1_embeddings.shape != view2_embeddings.shape:
+            raise ValueError('clean and dropout embeddings must have the same shape')
+
+        view1_embeddings, labels = self._gather_embeddings_and_labels(
+            view1_embeddings, local_labels
+        )
+        view2_embeddings, _ = self._gather_embeddings_and_labels(
+            view2_embeddings, local_labels
+        )
+        clean_embeddings, _ = self._gather_embeddings_and_labels(
+            clean_embeddings.detach(), local_labels
+        )
+        labels, weight = self._select_weight(labels)
+
+        positive_rows = torch.where(labels.view(-1) != -1)[0]
+        positive_labels = labels[positive_rows, 0]
+        normalized_weight = normalize(weight, dim=1).reshape(
+            -1, self.num_subcenters, self.embedding_size
+        )
+        with torch.no_grad():
+            clean_positive = normalize(clean_embeddings, dim=1)[positive_rows]
+            target_weights = normalized_weight[positive_labels]
+            routes = torch.einsum('bd,bkd->bk', clean_positive, target_weights).argmax(dim=1)
+
+        def locked_logits(embeddings):
+            subcenter_logits = self._compute_subcenter_logits(embeddings, weight)
+            logits = subcenter_logits.amax(dim=2).clone()
+            logits[positive_rows, positive_labels] = subcenter_logits[
+                positive_rows, positive_labels, routes
+            ]
+            return logits
+
+        logits1 = locked_logits(view1_embeddings)
+        logits2 = locked_logits(view2_embeddings)
+        clean_norms = clean_embeddings.norm(p=2, dim=1, keepdim=True).clamp_min(1e-8)
+        logits1, logits2 = self._apply_margin(logits1, logits2, labels, clean_norms)
+        return (
+            self.dist_cross_entropy(logits1, labels),
+            self.dist_cross_entropy(logits2, labels),
+        )
+
     def forward(
         self,
         local_embeddings: torch.Tensor,
@@ -171,38 +293,10 @@ class PartialFC_V2(torch.nn.Module):
             pass
         """
 
-        local_labels = local_labels.reshape(-1).long()
-
-        batch_size = local_embeddings.size(0)
-        if self.last_batch_size == 0:
-            self.last_batch_size = batch_size
-        assert self.last_batch_size == batch_size, (
-            f"last batch size do not equal current batch size: {self.last_batch_size} vs {batch_size}")
-
-        _gather_embeddings = [
-            torch.zeros((batch_size, self.embedding_size), dtype=local_embeddings.dtype, device=local_embeddings.device)
-            for _ in range(self.world_size)
-        ]
-        _gather_labels = [
-            torch.zeros(batch_size, dtype=torch.long, device=local_labels.device) for _ in range(self.world_size)
-        ]
-        _list_embeddings = AllGather(local_embeddings, *_gather_embeddings)
-        distributed.all_gather(_gather_labels, local_labels)
-
-        embeddings = torch.cat(_list_embeddings)
-        labels = torch.cat(_gather_labels)
-
-        labels = labels.view(-1, 1)
-        index_positive = (self.class_start <= labels) & (
-            labels < self.class_start + self.num_local
+        embeddings, labels = self._gather_embeddings_and_labels(
+            local_embeddings, local_labels
         )
-        labels[~index_positive] = -1
-        labels[index_positive] -= self.class_start
-
-        if self.sample_rate < 1:
-            weight = self.sample(labels, index_positive)
-        else:
-            weight = self.weight
+        labels, weight = self._select_weight(labels)
 
         # with torch.cuda.amp.autocast(self.fp16):
         norms = embeddings.norm(p=2, dim=1, keepdim=True).clamp_min(1e-8)

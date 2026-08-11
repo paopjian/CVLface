@@ -34,3 +34,10 @@ class PartialFCClassifier(BaseClassifier):
     def forward(self, local_embeddings, local_labels):
         loss = self.partial_fc(local_embeddings, local_labels)
         return loss
+
+    def forward_coreface_shared_route(
+        self, clean_embeddings, view1_embeddings, view2_embeddings, local_labels
+    ):
+        return self.partial_fc.forward_coreface_shared_route(
+            clean_embeddings, view1_embeddings, view2_embeddings, local_labels
+        )

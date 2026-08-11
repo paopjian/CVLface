@@ -28,6 +28,9 @@ class TrainModelClsPipeline(BasePipeline):
         self.coreface_weight_contrast_reverse = float(
             getattr(pipeline_config, 'coreface_weight_contrast_reverse', 0.0)
         )
+        self.coreface_shared_subcenter_routing = bool(
+            getattr(pipeline_config, 'coreface_shared_subcenter_routing', False)
+        )
         self.coreface_loss = ContraFaceLoss()
         self.coreface_active = False
         self.last_losses = {}
@@ -61,9 +64,20 @@ class TrainModelClsPipeline(BasePipeline):
             raise ValueError('not supported batch format')
         targets = targets.to(self.classifier.device)
         if self.coreface_active and self.model.has_trainable_params():
-            feat1, feat2 = self.model(inputs, coreface=True, dropout=self.coreface_dropout2)
-            loss1 = self.classifier(feat1, targets.clone())
-            loss2 = self.classifier(feat2, targets.clone())
+            if self.coreface_shared_subcenter_routing:
+                clean_feat, feat1, feat2 = self.model(
+                    inputs,
+                    coreface=True,
+                    dropout=self.coreface_dropout2,
+                    clean_route=True,
+                )
+                loss1, loss2 = self.classifier.forward_coreface_shared_route(
+                    clean_feat, feat1, feat2, targets.clone()
+                )
+            else:
+                feat1, feat2 = self.model(inputs, coreface=True, dropout=self.coreface_dropout2)
+                loss1 = self.classifier(feat1, targets.clone())
+                loss2 = self.classifier(feat2, targets.clone())
             contrast = self.coreface_loss(feat1, feat2, targets)
             contrast_reverse = self.coreface_loss(feat2, feat1, targets)
             loss = (

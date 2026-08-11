@@ -138,6 +138,36 @@ class SubcenterPartialFCTest(unittest.TestCase):
         self.assertTrue(torch.isfinite(feature2.grad).all())
         self.assertTrue(torch.isfinite(classifier.weight.grad).all())
 
+    def test_shared_route_locks_the_positive_subcenter(self):
+        classifier = self.make_classifier(
+            CombinedMarginLoss(1, 1.0, 0.0, 0.0),
+            num_subcenters=3,
+        )
+        with torch.no_grad():
+            classifier.weight.copy_(torch.tensor([
+                [1.0, 0.0], [0.0, 1.0], [-1.0, 0.0],
+                [0.0, 1.0], [1.0, 0.0], [0.0, -1.0],
+                [-1.0, 0.0], [0.0, -1.0], [1.0, 0.0],
+            ]))
+
+        clean = torch.tensor([[1.0, 0.0]], requires_grad=True)
+        # The dropped view is closer to subcenter 1, but the clean feature
+        # routes label 0 to subcenter 0.
+        view1 = torch.tensor([[0.1, 1.0]], requires_grad=True)
+        view2 = torch.tensor([[0.2, 1.0]], requires_grad=True)
+        loss1, loss2 = classifier.forward_coreface_shared_route(
+            clean, view1, view2, torch.tensor([0])
+        )
+        (loss1 + loss2).backward()
+
+        self.assertIsNone(clean.grad)
+        self.assertTrue(torch.isfinite(view1.grad).all())
+        self.assertTrue(torch.isfinite(view2.grad).all())
+        # The locked center receives the positive-class gradient; the
+        # competing positive subcenter does not.
+        self.assertGreater(classifier.weight.grad[0].abs().sum().item(), 0)
+        self.assertEqual(classifier.weight.grad[1].abs().sum().item(), 0)
+
     def test_coreface_subcenter_pipeline_backward(self):
         model_config = SimpleNamespace(
             name='ir18',
@@ -161,6 +191,7 @@ class SubcenterPartialFCTest(unittest.TestCase):
             coreface_weight2=0.5,
             coreface_weight_contrast=0.05,
             coreface_weight_contrast_reverse=0.0,
+            coreface_shared_subcenter_routing=True,
         )
         model = IResNetModel.from_config(model_config)
         classifier = PartialFCClassifier.from_config(
