@@ -38,6 +38,17 @@ evaluations=configs/val_20260605.yaml \
 dataset.model_save_dir=/data1/dataset_0605/train_output"
 
 
+COMMON="trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
+trainers.precision=bf16-mixed \
+models=iresnet/configs/v1_ir101.yaml \
+models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+dataset=configs/dataset_0605_train_rec2.yaml \
+data_augs=configs/basic_v2_numpy.yaml \
+classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+losses=configs/adaface.yaml \
+evaluations=configs/val_20260605.yaml \
+dataset.model_save_dir=/data1/dataset_0605/train_output"
+
 ################################################################################
 # 阶段1: 分类器训练 (backbone全冻结)
 # 目的: 在冻结backbone上训练分类器, 让FC权重适应新数据分布
@@ -72,7 +83,7 @@ Epoch 4 | Step 45265 | Batch 9052 | Speed 30126 | LR 0.00072 | Loss 7.0938: 100%
 优化后,使用rec文件
 fabric run --devices=8 --precision="bf16-mixed" \
     train_opt.py \
-    trainers.prefix=s1_warmup_0605 \
+    trainers.prefix=s1_warmup_0605_v2 \
     $COMMON \
     models.freeze=True \
     pefts=configs/freeze.yaml trainers.batch_size=512\
@@ -120,7 +131,7 @@ fabric run --devices=8 --precision="bf16-mixed" \
 fabric run --devices=8 --precision="bf16-mixed" \
     train_opt.py \
     $COMMON \
-    trainers.prefix=s2_body36_0605 \
+    trainers.prefix=s2_body36_0605_v2 \
     trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
@@ -129,7 +140,7 @@ fabric run --devices=8 --precision="bf16-mixed" \
     classifiers.freeze=True \
     data_augs=configs/gridsample_v2_numpy.yaml \
     pefts=configs/part_freeze.yaml pefts.target_modules=body.36 \
-    pefts.classifier_ckpt_dir=${STAGE1_CKPT} \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s1_warmup_0605_v2_06-13_0/checkpoints_every_epoch/epoch:4_step:43070 \
     optims=configs/step_sgd.yaml \
     optims.lr=0.008 optims.num_epoch=15 \
     optims.warmup_epoch=2 \
@@ -137,7 +148,7 @@ fabric run --devices=8 --precision="bf16-mixed" \
     optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
     optims.scheduler='cosine' \
     trainers.skip_final_eval=True \
-    dataset=configs/dataset_0605_train_rec.yaml \
+    dataset=configs/dataset_0605_train_rec2.yaml \
     dataset.model_save_dir=/data1/dataset_0605/train_output
 
 ################################################################################
@@ -155,14 +166,14 @@ fabric run --devices=8 --precision="bf16-mixed" \
     trainers.num_gpu=8 trainers.batch_size=512 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
-    models.start_from=/data1/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch/epoch:14_step:135795/model.pt \
+    models.start_from=/data1/dataset_0605/train_output/s2_body36_0605_v2_06-15_2/checkpoints_every_epoch/epoch:10_step:94754/model.pt \
     models.freeze=True \
-    dataset=configs/dataset_0605_train_rec.yaml \
+    dataset=configs/dataset_0605_train_rec2.yaml \
     data_augs=configs/gridsample_v2_numpy.yaml \
     classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
     losses=configs/adaface.yaml \
     pefts=configs/freeze.yaml \
-    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch/epoch:14_step:135795 \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s2_body36_0605_v2_06-15_2/checkpoints_every_epoch/epoch:10_step:94754 \
     optims=configs/step_sgd.yaml \
     optims.lr=0.006 optims.num_epoch=5 "optims.lr_milestones=[2,4]" \
     optims.momentum=0.9 optims.weight_decay=0.0001 \
@@ -206,15 +217,15 @@ conda run -n cvlface fabric run --strategy=ddp --devices=8 --precision="bf16-mix
 fabric run --devices=8 --precision="bf16-mixed" \
     train_opt.py \
     $COMMON \
-    trainers.prefix=s4_full_0605 \
+    trainers.prefix=s4_full_0605_v2 \
     trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 \
     trainers.precision=bf16-mixed \
     models=iresnet/configs/v1_ir101.yaml \
-    models.start_from=/data1/dataset_0605/train_output/s3_classifier_0605_06-11_1/checkpoints_every_epoch/epoch:4_step:45265/model.pt \
+    models.start_from=/data1/dataset_0605/train_output/s3_classifier_0605_06-16_0/checkpoints_every_epoch/epoch:4_step:43070/model.pt \
     classifiers.freeze=True \
     data_augs=configs/gridsample_v2_numpy.yaml \
     pefts=configs/full.yaml \
-    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s3_classifier_0605_06-11_1/checkpoints_every_epoch/epoch:4_step:45265 \
+    pefts.classifier_ckpt_dir=/data1/dataset_0605/train_output/s3_classifier_0605_06-16_0/checkpoints_every_epoch/epoch:4_step:43070 \
     optims=configs/step_sgd.yaml \
     optims.lr=0.0008 optims.num_epoch=15 \
     optims.warmup_epoch=2 \
@@ -222,7 +233,7 @@ fabric run --devices=8 --precision="bf16-mixed" \
     optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
     optims.scheduler='cosine' \
     trainers.skip_final_eval=True \
-    dataset=configs/dataset_0605_train_rec.yaml \
+    dataset=configs/dataset_0605_train_rec2.yaml \
     dataset.model_save_dir=/data1/dataset_0605/train_output
 
 
