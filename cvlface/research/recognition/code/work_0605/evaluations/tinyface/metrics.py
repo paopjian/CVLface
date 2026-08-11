@@ -22,9 +22,26 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+import time
 import torch
 import numpy as np
 from warnings import warn
+
+
+def get_tinyface_num_threads():
+    configured_threads = os.environ.get("TINYFACE_NUM_THREADS")
+    if configured_threads:
+        num_threads = int(configured_threads)
+    else:
+        try:
+            available_cpus = len(os.sched_getaffinity(0))
+        except AttributeError:
+            available_cpus = os.cpu_count() or 1
+        num_threads = min(32, available_cpus)
+    if num_threads < 1:
+        raise ValueError(f"TINYFACE_NUM_THREADS must be positive, got {num_threads}")
+    return num_threads
 
 # Find thresholds given FARs
 # but the real FARs using these thresholds could be different
@@ -157,20 +174,25 @@ def DIR_FAR(score_mat, label_mat, ranks=[1], FARs=[1.0], get_false_indices=False
     # Split the matrix for match probes and non-match probes
     # subfix _m: match, _nm: non-match
     # For closed set, we only use the match probes
+    stage_start = time.perf_counter()
     match_indices = label_mat.astype(np.bool).any(axis=1)
     score_mat_m = score_mat[match_indices,:]
     label_mat_m = label_mat[match_indices,:]
     score_mat_nm = score_mat[np.logical_not(match_indices),:]
     label_mat_nm = label_mat[np.logical_not(match_indices),:]
+    print(f"TinyFace stage split_matrices: {time.perf_counter() - stage_start:.3f}s")
 
     print('mate probes: %d, non mate probes: %d' % (score_mat_m.shape[0], score_mat_nm.shape[0]))
 
     # Find the thresholds for different FARs
+    stage_start = time.perf_counter()
     if score_mat_nm.shape[0] > 0:
         max_score_nm = np.max(score_mat_nm, axis=1)
     else:
         max_score_nm = np.array([], dtype=score_mat.dtype)
+    print(f"TinyFace stage max_nonmate_scores: {time.perf_counter() - stage_start:.3f}s")
 
+    stage_start = time.perf_counter()
     if len(FARs) == 1 and FARs[0] >= 1.0:
         thresholds = [float(torch.from_numpy(score_mat).min().item()) - 1e-10]
         openset = False
@@ -179,17 +201,39 @@ def DIR_FAR(score_mat, label_mat, ranks=[1], FARs=[1.0], get_false_indices=False
         assert score_mat_nm.shape[0] > 0, "For open-set identification (FAR<1.0), there should be at least one non-mate probe!"
         thresholds = find_thresholds_by_FAR(max_score_nm, label_temp, FARs=FARs)
         openset = True
+    print(f"TinyFace stage thresholds: {time.perf_counter() - stage_start:.3f}s")
 
-    # Sort the labels row by row according to scores (use torch to avoid numpy OpenMP deadlock)
-    score_mat_m_t = torch.from_numpy(score_mat_m)
-    sort_idx_mat_m = torch.argsort(score_mat_m_t, dim=1, descending=True)
-    del score_mat_m_t
+    # Only the requested ranks are needed. Full argsort over the entire gallery
+    # is substantially more expensive and produces the same result here.
+    max_rank = min(max(ranks), score_mat_m.shape[1])
+    previous_threads = torch.get_num_threads()
+    target_threads = get_tinyface_num_threads()
+    if previous_threads != target_threads:
+        torch.set_num_threads(target_threads)
+    try:
+        stage_start = time.perf_counter()
+        score_mat_m_t = torch.from_numpy(score_mat_m)
+        topk_idx_mat_m = torch.topk(
+            score_mat_m_t,
+            k=max_rank,
+            dim=1,
+            largest=True,
+            sorted=True,
+        ).indices
+        del score_mat_m_t
+        print(f"TinyFace stage topk: {time.perf_counter() - stage_start:.3f}s")
 
-    label_mat_m_t = torch.from_numpy(label_mat_m.astype(np.bool_)).long()
-    sorted_label_mat_m = torch.gather(label_mat_m_t, 1, sort_idx_mat_m).numpy().astype(np.bool_)
-    del label_mat_m_t, sort_idx_mat_m
+        stage_start = time.perf_counter()
+        label_mat_m_t = torch.from_numpy(label_mat_m.astype(np.bool_))
+        topk_label_mat_m = torch.gather(label_mat_m_t, 1, topk_idx_mat_m).numpy()
+        print(f"TinyFace stage gather_labels: {time.perf_counter() - stage_start:.3f}s")
+    finally:
+        if previous_threads != target_threads:
+            torch.set_num_threads(previous_threads)
+    del label_mat_m_t, topk_idx_mat_m
         
     # Calculate DIRs for different FARs and ranks
+    stage_start = time.perf_counter()
     if openset:
         gt_score_m = score_mat_m[label_mat_m]
         assert gt_score_m.size == score_mat_m.shape[0]
@@ -202,7 +246,7 @@ def DIR_FAR(score_mat, label_mat, ranks=[1], FARs=[1.0], get_false_indices=False
         false_accept = np.zeros([len(FARs), len(ranks), score_mat_nm.shape[0]], dtype=np.bool)
     for i, threshold in enumerate(thresholds):
         for j, rank  in enumerate(ranks):
-            success_retrieval = sorted_label_mat_m[:,0:rank].any(axis=1)
+            success_retrieval = topk_label_mat_m[:, 0:min(rank, max_rank)].any(axis=1)
             if openset:
                 success_threshold = gt_score_m >= threshold
                 DIRs[i,j] = (success_threshold & success_retrieval).astype(np.float32).mean()
@@ -220,9 +264,56 @@ def DIR_FAR(score_mat, label_mat, ranks=[1], FARs=[1.0], get_false_indices=False
         DIRs = DIRs.flatten()
 
     if get_false_indices:
-        return DIRs, FARs, thresholds, match_indices, false_retrieval, false_reject, false_accept, sort_idx_mat_m
+        print(f"TinyFace stage result_finalize: {time.perf_counter() - stage_start:.3f}s")
+        return DIRs, FARs, thresholds, match_indices, false_retrieval, false_reject, false_accept, None
     else:
+        print(f"TinyFace stage result_finalize: {time.perf_counter() - stage_start:.3f}s")
         return DIRs, FARs, thresholds
+
+
+def closed_set_cmc(score_mat, probe_labels, gallery_labels, ranks=(1,)):
+    """Compute closed-set CMC ranks without building a full label matrix."""
+    total_start = time.perf_counter()
+    assert score_mat.ndim == 2
+    assert score_mat.shape == (len(probe_labels), len(gallery_labels))
+    assert ranks and min(ranks) > 0
+
+    max_rank = min(max(ranks), score_mat.shape[1])
+    previous_threads = torch.get_num_threads()
+    target_threads = get_tinyface_num_threads()
+    if previous_threads != target_threads:
+        torch.set_num_threads(target_threads)
+
+    try:
+        stage_start = time.perf_counter()
+        score_mat_t = torch.from_numpy(score_mat)
+        topk_indices = torch.topk(
+            score_mat_t,
+            k=max_rank,
+            dim=1,
+            largest=True,
+            sorted=True,
+        ).indices
+        print(f"TinyFace stage closed_set_topk: {time.perf_counter() - stage_start:.3f}s")
+
+        stage_start = time.perf_counter()
+        gallery_labels_t = torch.from_numpy(np.asarray(gallery_labels))
+        probe_labels_t = torch.from_numpy(np.asarray(probe_labels))
+        topk_matches = gallery_labels_t[topk_indices].eq(probe_labels_t[:, None])
+        print(f"TinyFace stage closed_set_label_lookup: {time.perf_counter() - stage_start:.3f}s")
+
+        stage_start = time.perf_counter()
+        results = np.asarray([
+            topk_matches[:, :min(rank, max_rank)].any(dim=1).float().mean().item()
+            for rank in ranks
+        ], dtype=np.float32)
+        print(f"TinyFace stage closed_set_finalize: {time.perf_counter() - stage_start:.3f}s")
+    finally:
+        if previous_threads != target_threads:
+            torch.set_num_threads(previous_threads)
+
+    print(f"TinyFace stage closed_set_total: {time.perf_counter() - total_start:.3f}s")
+    return results
 
 def accuracy(score_vec, label_vec, thresholds=None):
     assert len(score_vec.shape)==1
