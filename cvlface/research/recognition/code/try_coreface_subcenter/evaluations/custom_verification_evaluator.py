@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 from scipy.interpolate import interp1d
 import pickle
 import time
+import json
 from PIL import Image, ImageDraw, ImageFont
 
 def compute_tpir_from_heap(neg_heap, pos_scores, total_neg_pairs, target_fars):
@@ -591,12 +592,116 @@ class CustomVerificationEvaluator(BaseEvaluator):
     def integrity_check(self, eval_color_space, pipeline_color_space):
         assert eval_color_space == pipeline_color_space
 
+    def _metric_sync_path(self, epoch, step, n_images_seen):
+        """Return a per-job CPU control file for multi-GPU metric completion."""
+        master_port = os.environ.get("MASTER_PORT", "default")
+        run_id = os.environ.get("TORCHELASTIC_RUN_ID", "default")
+        safe_name = self.name.replace(os.sep, "_").replace("/", "_")
+        root = os.path.join(
+            "/tmp",
+            "qgface_metric_sync",
+            f"{master_port}_{run_id}",
+        )
+        os.makedirs(root, exist_ok=True)
+        return os.path.join(root, f"{safe_name}_{epoch}_{step}_{n_images_seen}.json")
+
+    @staticmethod
+    def _publish_metric_status(path, status, error=None):
+        payload = {"status": status}
+        if error is not None:
+            payload["error"] = repr(error)
+        tmp_path = f"{path}.{os.getpid()}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        os.replace(tmp_path, path)
+
+    @staticmethod
+    def _wait_for_metric_status(path):
+        timeout = float(os.environ.get("QGFACE_METRIC_SYNC_TIMEOUT_SEC", "7200"))
+        deadline = time.monotonic() + timeout
+        while not os.path.exists(path):
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Timed out waiting for metric status: {path}")
+            time.sleep(0.1)
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if payload.get("status") != "ok":
+            raise RuntimeError(
+                f"Rank 0 metric failed: {payload.get('error', 'unknown error')}"
+            )
+
+    def run_rank_zero_metric(self, compute_fn, epoch, name_suffix, n_images_seen):
+        """
+        Execute compute_fn on rank 0 with status-file sync for other ranks.
+
+        This method prevents NCCL deadlock when compute_fn uses multi-GPU workers
+        (e.g., ThreadPoolExecutor with num_gpus=8). Non-zero ranks poll a status
+        file instead of entering an NCCL barrier while rank 0's worker threads
+        occupy their GPUs.
+
+        Args:
+            compute_fn: Callable that returns result dict, executed only on rank 0
+            epoch: Current epoch number
+            name_suffix: Unique suffix for the sync file (e.g., "combined_123")
+            n_images_seen: Total images seen (for uniqueness)
+
+        Returns:
+            dict: Result from compute_fn (rank 0) or empty dict (other ranks)
+        """
+        # Generate unique sync file path
+        metric_sync_path = self._metric_sync_path(epoch, name_suffix, n_images_seen)
+
+        # Clean up old sync file before starting
+        if self.fabric.local_rank == 0:
+            try:
+                os.remove(metric_sync_path)
+            except FileNotFoundError:
+                pass
+
+        # Barrier before metric starts (all ranks ready)
+        self.fabric.barrier()
+
+        # Rank 0 executes multi-GPU metric, other ranks wait via file polling
+        if self.fabric.local_rank == 0:
+            try:
+                start_time = time.time()
+                result = compute_fn()
+                elapsed = time.time() - start_time
+                print(f"Rank 0 metric '{name_suffix}' completed in {elapsed:.2f}s")
+
+                # Publish success status
+                self._publish_metric_status(metric_sync_path, "ok")
+            except Exception as error:
+                # Publish error status to notify other ranks
+                self._publish_metric_status(metric_sync_path, "error", error)
+                raise
+        else:
+            result = {}
+            # Poll status file instead of NCCL barrier
+            self._wait_for_metric_status(metric_sync_path)
+
+        # After metric completes, all ranks synchronize via NCCL
+        self.fabric.barrier()
+        torch.cuda.empty_cache()
+
+        return result
 
     @torch.no_grad()
     def evaluate(self, pipeline, epoch=0, step=0, n_images_seen=0, save_image_path=None, save_pkl=None,image_dir=None):
         pipeline.eval()
         self.save_image_path = save_image_path
         self.image_dir = image_dir
+
+        # type=4 launches an 8-GPU metric worker pool from rank 0.  Do not let
+        # the other ranks enter an NCCL barrier while those GPUs are in use.
+        metric_sync_path = self._metric_sync_path(epoch, step, n_images_seen) if self.type == '4' else None
+        if metric_sync_path is not None:
+            if self.fabric.local_rank == 0:
+                try:
+                    os.remove(metric_sync_path)
+                except FileNotFoundError:
+                    pass
+            self.fabric.barrier()
 
         # 检查是否有缓存的pkl结果（所有rank都检查，避免分布式不一致）
         use_cache = save_pkl and os.path.exists(f'{save_pkl}/collection1.pkl')
@@ -621,13 +726,24 @@ class CustomVerificationEvaluator(BaseEvaluator):
                     pickle.dump(collection_flip, f)
 
         if self.fabric.local_rank == 0:
-            result = self.compute_metric(collection, collection_flip)
-            self.log(result, epoch, step, n_images_seen)
-            del collection, collection_flip
+            try:
+                result = self.compute_metric(collection, collection_flip)
+                self.log(result, epoch, step, n_images_seen)
+                if metric_sync_path is not None:
+                    self._publish_metric_status(metric_sync_path, "ok")
+            except Exception as error:
+                if metric_sync_path is not None:
+                    self._publish_metric_status(metric_sync_path, "error", error)
+                raise
+            finally:
+                del collection, collection_flip
         else:
             result = {}
             if not use_cache:
                 del collection, collection_flip
+            if metric_sync_path is not None:
+                torch.cuda.empty_cache()
+                self._wait_for_metric_status(metric_sync_path)
 
         # 等待 rank 0 的 compute_metric 完成，避免其多 GPU 计算与其他 rank 的下一轮 extract 冲突
         self.fabric.barrier()
@@ -814,7 +930,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 pos_hist, neg_hist = get_sim_matrix_large_scale_v5(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
-                    num_gpus=7,
+                    num_gpus=8,
                     block_size=2048*4,
                     show_progress=True,
                 )
@@ -831,7 +947,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 _, _, all_high_sim_pairs = get_sim_matrix_large_scale_v5(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
-                    num_gpus=7,
+                    num_gpus=8,
                     block_size=2048*2,
                     show_progress=True,
                     collect_pairs_config={
@@ -889,7 +1005,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 pos_hist, neg_hist = get_sim_matrix_large_scale_v5(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
-                    num_gpus=7,
+                    num_gpus=8,
                     block_size=2048*4,
                     show_progress=True,
                 )
