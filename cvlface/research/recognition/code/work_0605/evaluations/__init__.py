@@ -94,7 +94,7 @@ def run_combined_evaluations(evaluators_dict, combined_config):
         target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
 
         # _available_gpus = torch.cuda.device_count()
-        _available_gpus = 7
+        _available_gpus = 8
         pos_hist, neg_hist = get_sim_matrix_large_scale_v4(
             query_feats_list=combined_embeddings,
             query_ids=combined_query_ids,
@@ -124,6 +124,21 @@ def run_combined_evaluations(evaluators_dict, combined_config):
             evaluator.cached_query_ids = None
 
     return all_combined_results
+
+
+def run_combined_evaluations_distributed(
+    fabric, evaluators_dict, combined_config, epoch, step, n_images_seen
+):
+    """Run combined GPU metrics without parking non-zero ranks in NCCL."""
+    if not evaluators_dict:
+        return {}
+    coordinator = next(iter(evaluators_dict.values()))
+    return coordinator.run_rank_zero_metric(
+        lambda: run_combined_evaluations(evaluators_dict, combined_config),
+        epoch,
+        f"combined_{step}",
+        n_images_seen,
+    )
 
 
 def summary(save_result, epoch, step, n_images_seen):
