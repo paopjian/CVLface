@@ -32,7 +32,7 @@ import lovely_tensors as lt
 lt.monkey_patch()
 from tqdm import tqdm
 from evaluations import IsBestTracker, summary
-from evaluations import run_combined_evaluations
+from evaluations import run_combined_evaluations_distributed
 import time
 import mlflow
 from lightning.fabric import Fabric
@@ -563,20 +563,14 @@ if __name__ == '__main__':
             # Combined evaluations (合并多源评估)
             combined_config = None if cfg.trainers.external_eval else getattr(cfg.evaluations, 'combined_evaluations', None)
             if combined_config:
-                # 所有 rank 都打印，确保日志可见
-                print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
+                evaluators_dict = {e.name: e for e in evaluators}
+                combined_start = time.time()
+                combined_result = run_combined_evaluations_distributed(
+                    fabric, evaluators_dict, combined_config, epoch, step, n_images_seen
+                )
+                all_result.update(combined_result)
                 if fabric.local_rank == 0:
-                    import datetime
-                    # 延长 NCCL 超时，防止合并计算耗时过长导致其他 rank timeout
-                    old_timeout = os.environ.get('NCCL_TIMEOUT', None)
-                    os.environ['NCCL_ASYNC_ERROR_HANDLING'] = '1'
-
-                    evaluators_dict = {e.name: e for e in evaluators}
-                    combined_start = time.time()
-                    combined_result = run_combined_evaluations(evaluators_dict, combined_config)
-                    all_result.update(combined_result)
                     print(f'合并评估完成，耗时: {(time.time() - combined_start) / 60:.2f} mins')
-                fabric.barrier()
 
             if fabric.local_rank == 0:
                 if all_result:
@@ -693,14 +687,14 @@ if __name__ == '__main__':
         # Combined evaluations (合并多源评估)
         combined_config = getattr(cfg.evaluations, 'combined_evaluations', None)
         if combined_config:
-            print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
+            evaluators_dict = {e.name: e for e in evaluators}
+            combined_start = time.time()
+            combined_result = run_combined_evaluations_distributed(
+                fabric, evaluators_dict, combined_config, epoch, step, n_images_seen
+            )
+            all_result.update(combined_result)
             if fabric.local_rank == 0:
-                evaluators_dict = {e.name: e for e in evaluators}
-                combined_start = time.time()
-                combined_result = run_combined_evaluations(evaluators_dict, combined_config)
-                all_result.update(combined_result)
                 print(f'合并评估完成，耗时: {(time.time() - combined_start) / 60:.2f} mins')
-            fabric.barrier()
 
         if fabric.local_rank == 0:
             os.makedirs(os.path.join(cfg.trainers.output_dir, 'result'), exist_ok=True)
