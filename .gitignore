@@ -143,6 +143,9 @@ dmypy.json
 *.h5
 *.tar
 *.tar.gz
+*.pt
+cvlface/pretrained_models/
+wandb/
 
 # Lightning-Hydra-Template
 .env
