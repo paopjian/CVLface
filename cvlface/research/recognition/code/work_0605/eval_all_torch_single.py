@@ -208,18 +208,18 @@ if __name__ == '__main__':
     # Combined evaluations (合并多源评估)
     combined_config = getattr(eval_config, 'combined_evaluations', None)
     if combined_config:
-        print(f'[Rank {fabric.local_rank}] 等待合并评估 (rank 0 计算中)...')
+        from evaluations import run_combined_evaluations_distributed
+        evaluators_dict = {e.name: e for e in evaluators}
+        combined_start = time.time()
+        combined_result = run_combined_evaluations_distributed(
+            fabric, evaluators_dict, combined_config, epoch=0, step=0, n_images_seen=0
+        )
+        all_result.update(combined_result)
+        combined_elapsed = time.time() - combined_start
         if fabric.local_rank == 0:
-            from evaluations import run_combined_evaluations
-            evaluators_dict = {e.name: e for e in evaluators}
-            combined_start = time.time()
-            combined_result = run_combined_evaluations(evaluators_dict, combined_config)
-            all_result.update(combined_result)
-            combined_elapsed = time.time() - combined_start
             print(f'合并评估完成，耗时: {combined_elapsed / 60:.2f} mins')
             if args.timing:
                 timing_results['combined_evaluations'] = combined_elapsed
-        fabric.barrier()
 
     total_elapsed = time.time() - total_start
 
