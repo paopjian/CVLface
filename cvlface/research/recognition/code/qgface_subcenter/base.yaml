@@ -1,0 +1,12 @@
+defaults:
+  - trainers : configs/default
+  - optims : configs/qgface_sgd
+  - pefts: configs/none
+  - models: iresnet/configs/qgface_ir34
+  - classifiers: configs/partial_fc
+  - aligners: configs/none
+  - dataset: configs/casia
+  - data_augs: configs/qgface
+  - losses: configs/qgface_adaface
+  - pipelines: configs/train_qgface_paper
+  - evaluations: configs/base

@@ -1,0 +1,23 @@
+name: 'TrainQGFacePipeline'
+resume: ${trainers.resume}
+eval_pipeline_name: 'infer_model_pipeline'
+
+contrast_weight: 1.0
+contrast_start_epoch: 0
+
+qgface:
+  queue_size: ${dataset.num_classes}
+  scale: 64.0
+  margin: 0.4
+  margin_method: null
+  quality_scale: 0.2
+  quality_scale_method: 'sgn'
+  quality_scale_range: 'half'
+  quality_select_method: 'low'
+  pair_coupling: 'D2N'
+  mask_same_class: false
+  detach_positive: false
+  rescale: true
+  rescale_reference_size: 129
+  h: 0.333
+  t_alpha: 0.01

@@ -1,0 +1,6 @@
+# Exact full-class softmax with class proxies sharded across all ranks.
+name: 'partial_fc'
+sample_rate: 1.0
+pad_classes: false
+start_from: ''
+freeze: False
