@@ -1,0 +1,10 @@
+augmentation_version: 'identity_v2_numpy'
+contrastive_views: true
+aug_params: {}
+qgface_view_params:
+  output_size: 112
+  low_res_scale: [0.1, 0.5]
+  jpeg_quality: 75
+  crop_probability: 0.2
+  photometric_probability: 0.2
+  rotation_probability: 0.0

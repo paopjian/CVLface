@@ -1,0 +1,3 @@
+name: 'TrainModelClsPipeline'
+resume: '/root/zhaokj/CVLface/cvlface/research/recognition/experiments/work_0725/ir101_adaface_07-24_1/checkpoints_every_epoch/epoch:10_step:144056'
+eval_pipeline_name: 'infer_model_pipeline'

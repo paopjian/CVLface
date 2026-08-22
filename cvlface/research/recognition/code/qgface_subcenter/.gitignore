@@ -1,0 +1,6 @@
+wandb/
+
+# Local Python and notebook artifacts
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
