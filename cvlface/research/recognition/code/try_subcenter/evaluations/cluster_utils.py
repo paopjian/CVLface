@@ -2116,19 +2116,35 @@ def get_sim_matrix_large_scale_v5(
     print(f"计算总耗时: {time.time() - start:.2f} 秒")
 
     # 释放各 GPU 上的 CUDA 缓存
+    # 逐设备计时: rank 0 在此遍历所有 GPU, 而 GPU 1-N 上驻留着其他 rank 的显存池,
+    # 跨进程争夺驱动侧分配器锁可能造成不可预测的阻塞
+    cache_start = time.time()
+    cache_times = []
     for gid in range(num_gpus):
+        t0 = time.time()
         with torch.cuda.device(gid):
             torch.cuda.empty_cache()
+        cache_times.append(time.time() - t0)
+    print(f"[timing] empty_cache 合计: {time.time() - cache_start:.2f}s | "
+          f"各GPU: {', '.join(f'{t:.2f}' for t in cache_times)}")
 
     # 结果聚合
+    agg_start = time.time()
     total_pos_hist = torch.zeros(hist_bins, dtype=torch.long)
     total_neg_hist = torch.zeros(hist_bins, dtype=torch.long)
     for p_hist, n_hist in results:
         total_pos_hist += p_hist
         total_neg_hist += n_hist
+    print(f"[timing] 直方图聚合: {time.time() - agg_start:.2f}s "
+          f"({len(results)} GPU x {hist_bins:,} bins)")
 
-    print(f"Total Pos Pairs: {total_pos_hist.sum().item()}")
-    print(f"Total Neg Pairs: {total_neg_hist.sum().item()}")
+    sum_start = time.time()
+    total_pos_pairs = total_pos_hist.sum().item()
+    total_neg_pairs = total_neg_hist.sum().item()
+    print(f"[timing] 直方图求和: {time.time() - sum_start:.2f}s")
+
+    print(f"Total Pos Pairs: {total_pos_pairs}")
+    print(f"Total Neg Pairs: {total_neg_pairs}")
 
     if collect_pairs_config is not None:
         if is_dual_mode:

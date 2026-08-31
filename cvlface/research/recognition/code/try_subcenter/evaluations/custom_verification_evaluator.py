@@ -60,15 +60,23 @@ def compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=20_000_000, hist_range=
     从直方图计算 TPIR
     pos_hist/neg_hist: shape (hist_bins,), 每个bin的计数
     """
+    t0 = time.time()
     total_neg = int(neg_hist.sum())
     total_pos = int(pos_hist.sum())
+    t_sum = time.time() - t0
 
     # 从右到左累积（高相似度到低相似度）
+    # 注意 [::-1] 是负步长视图, cumsum 在非连续内存上可能显著变慢
+    t0 = time.time()
     neg_cumsum = np.cumsum(neg_hist[::-1])
     pos_cumsum = np.cumsum(pos_hist[::-1])
+    t_cumsum = time.time() - t0
 
+    t0 = time.time()
     bin_edges = np.linspace(hist_range[0], hist_range[1], hist_bins + 1)
+    t_edges = time.time() - t0
 
+    t0 = time.time()
     results = {}
     thresholds = {}
 
@@ -87,6 +95,11 @@ def compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=20_000_000, hist_range=
 
         results[f'tpir_at_far_{far}'] = float(tpir) * 100
         thresholds[far] = threshold
+    t_search = time.time() - t0
+
+    print(f"[timing] compute_tpir_from_hist: sum={t_sum:.2f}s "
+          f"cumsum={t_cumsum:.2f}s linspace={t_edges:.2f}s search={t_search:.2f}s "
+          f"({hist_bins:,} bins)")
 
     return results, thresholds
 
