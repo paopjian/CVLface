@@ -1,0 +1,22 @@
+# 测试评估
+LIGHTING_TESTING=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 lightning run model \
+  --strategy=ddp --devices=8 --precision="bf16-mixed" \
+  train.py \
+  trainers.prefix=ft_ir101_s1_cls_warmup \
+  trainers.num_gpu=8 trainers.batch_size=256 trainers.num_workers=8 trainers.limit_num_batch=10\
+  trainers.precision='bf16-mixed' \
+  trainers.float32_matmul_precision='high' \
+  models=iresnet/configs/v1_ir101.yaml models.freeze=True \
+  models.start_from=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt \
+  dataset=configs/dataset_0320_train.yaml \
+  data_augs=configs/basic_v1.yaml \
+  classifiers=configs/partial_fc_sample10.yaml classifiers.sample_rate=0.40 \
+  losses=configs/adaface.yaml \
+  pefts=configs/freeze.yaml \
+  optims=configs/step_sgd.yaml \
+  optims.lr=0.008 optims.num_epoch=5 optims.lr_milestones=[2,4] \
+  optims.momentum=0.9 optims.weight_decay=0.0001 \
+  optims.lr_lambda=0.3 optims.max_grad_norm=5.0 \
+  trainers.skip_final_eval=True \
+  evaluations=configs/val_20260320.yaml \
+  dataset.model_save_dir=/data2/dataset_0320_rec/train_output

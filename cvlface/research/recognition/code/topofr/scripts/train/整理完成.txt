@@ -1,0 +1,45 @@
+## ✅ TopoFR 训练脚本整理完成
+
+所有训练脚本和辅助工具已整理到：
+
+**位置**: `/root/zhaokj/CVLface/cvlface/research/recognition/code/topofr/scripts/train/`
+
+---
+
+## 📁 目录内容
+
+### 训练脚本 (8个)
+
+**使用预训练模型 (推荐):**
+- `train_topofr_from_pretrained.sh` ⭐⭐⭐
+- `train_topofr_from_pretrained_quick.sh`
+- `train_topofr_from_pretrained_aggressive.sh`
+
+**从头训练:**
+- `train_topofr_e2e_full.sh`
+- `train_topofr_e2e_quick.sh`
+- `train_topofr_e2e_cosine.sh`
+- `train_baseline_adaface_e2e.sh`
+- `train_topofr_0605.sh`
+
+### 辅助工具 (2个)
+- `test_topofr_integration.py`
+- `verify_files.sh`
+
+### 文档 (在上级目录)
+- 所有文档保留在 `/root/zhaokj/CVLface/cvlface/research/recognition/code/topofr/`
+
+---
+
+## 🚀 快速使用
+
+```bash
+cd /root/zhaokj/CVLface/cvlface/research/recognition/code/topofr/scripts/train
+
+# 最推荐：使用预训练模型
+bash train_topofr_from_pretrained.sh
+```
+
+---
+
+**状态**: ✅ 完成整理，可以开始训练！

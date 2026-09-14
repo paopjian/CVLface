@@ -1,0 +1,206 @@
+TopoFR BN progress experiment
+8 GPUs; one epoch; agedb_30 at 10/20/30/40/50%
+pretrained: /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+data root:  /data1/dataset_0605
+output:     /data1/dataset_0605/train_output/bn_progress_20260902_114725
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+检测到键名不匹配，为预训练模型添加 'net.' 前缀检测到键名不匹配，为预训练模型添加 'net.' 前缀检测到键名不匹配，为预训练模型添加 'net.' 前缀
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dictcompatible keys in state_dict compatible keys in state_dict 925 925 925 / / /
+ 926 926
+926
+Check
+
+
+Check
+
+
+Check
+
+
+
+compatible keys in state_dict 925 / 926
+Check
+
+
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dictcompatible keys in state_dict 925 / 925 926
+ / Check
+
+
+926
+Check
+
+
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+Loaded iResNet model
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+AugmentMXDatasetV2: augmentation_version=gridsample_v2_numpy
+GridSampleAugmenterV2Numpy
+总 batch: 36215; 评估节点: 10%, 20%, 30%, 40%, 50%
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+Loaded iResNet model
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+检测到键名不匹配，为预训练模型添加 'net.' 前缀
+compatible keys in state_dict 925 / 926
+Check
+
+
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+_IncompatibleKeys(missing_keys=[], unexpected_keys=['net.weight'])
+Loaded pretrained model from /root/zhaokj/CVLface/cvlface/pretrained_models/recognition/topofr100/Glint360K_R100_TopoFR_9760.pt
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler
+Apply peft
+trainable params: 65155648 || all params: 65156160 || trainable%: 100.00
+skip_center loading
+Total params: 115812928
+Trainable params: 115812416
+Percentage of trainable params: 100.00%
+step scheduler

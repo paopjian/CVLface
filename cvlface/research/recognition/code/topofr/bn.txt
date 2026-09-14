@@ -1,0 +1,74 @@
+ ▐▛███▛█   Claude Code v2.1.251
+▝▜██████▀  Opus 5 · API Usage Billing
+  ▝▝ ▝▝    ~/zhaokj/CVLface
+
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+● 不是"训练坏了"，而是预训练模型在微调时的正常但不合适的行为。
+
+  让我澄清三个层面：
+
+  1. 模型本身没有损坏
+
+  - 训练代码正确运行
+  - 梯度正常反向传播
+  - 损失在下降
+  - 精度会逐渐恢复（从72%继续训练会提升）
+
+  2. 问题是：预训练知识被快速遗忘
+
+  你的场景：
+  - 预训练模型在Glint360K上达到98.63%
+  - 第1个epoch后降到72.07%
+  - 原因：BN的running statistics从"Glint360K分布"被替换成"dataset_0605分布"
+
+  这不是bug，是PyTorch BN的默认行为：
+  # 训练模式下，每个batch自动执行：
+  running_mean = 0.9 * running_mean + 0.1 * batch_mean
+
+  3. 为什么这是问题
+
+  预训练模型的价值在于：
+  - 特征提取器（backbone + BN）学会了通用人脸表示
+  - 分类器（FC层）学会了360K个身份
+
+  你想做的：
+  - 保留通用人脸表示（不要改变特征分布）
+  - 只替换分类器头（从360K类换成你的新类）
+
+  但实际发生：
+  - BN统计量变了 → 特征分布变了 → 预训练的特征提取能力部分失效
+  - 需要重新训练才能恢复
+
+  对比实验可以验证
+
+  如果你：
+  1. 冻结BN → 第1个epoch后仍保持~98%（分类器可能略低但backbone完好）
+  2. 不冻结BN（当前） → 第1个epoch后降到72%
+
+  要我帮你快速验证吗？修改train_opt.py，跑1个epoch对比结果。
+
+✻ Cooked for 18s · done 10:07 AM
+
+❯ /status 
+  ⎿  Settings dialog dismissed
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Referenced file cvlface/research/recognition/code/topofr/train_opt.py
+
+❯ 分类器是全新的, 没有学会分类, BN会变这么多?                                   
+
+● 好问题！你说对了一个关键点：分类器是全新随机初始化的，还没学会分类。
+
+  让我验证BN统计量在第1个epoch真的变化这么大：
+
+● Bash(python3 << 'EOF'
+      import torch…)
+  ⎿  Error: Exit code 1
+     Traceback (most recent call last):
+       File "<stdin>", line 1, in <module>
+     ModuleNotFoundError: No module named 'torch'
+  ⎿  Interrupted · What should Claude do instead?

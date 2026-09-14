@@ -1,0 +1,223 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    TopoFR 训练脚本 - 快速选择指南                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+## 📁 所有可用脚本
+
+### 端到端训练 (End-to-End)
+
+1. train_topofr_e2e_full.sh          ⭐ 推荐 - 完整训练
+2. train_topofr_e2e_quick.sh         ⚡ 快速验证版本
+3. train_topofr_e2e_cosine.sh        📈 使用 Cosine LR
+4. train_baseline_adaface_e2e.sh     📊 Baseline 对比
+
+### 多阶段训练 (4-Stage)
+
+5. train_topofr_0605.sh              🔧 完整4阶段流程
+
+## 🎯 快速决策树
+
+```
+需要训练 TopoFR 吗?
+    │
+    ├─ 是 → 第一次使用？
+    │        │
+    │        ├─ 是 → 先验证代码
+    │        │       └→ train_topofr_e2e_quick.sh (10 epochs, ~12h)
+    │        │
+    │        └─ 否 → 生产训练
+    │                ├→ train_topofr_e2e_full.sh (20 epochs, ~25h)
+    │                └→ train_topofr_e2e_cosine.sh (30 epochs, ~35h)
+    │
+    └─ 否 → 需要 Baseline 对比
+             └→ train_baseline_adaface_e2e.sh (20 epochs, ~18h)
+```
+
+## 🚀 最常用的三个命令
+
+### 1️⃣ 快速验证 (首次使用)
+```bash
+cd /root/zhaokj/CVLface/cvlface/research/recognition/code/topofr
+bash train_topofr_e2e_quick.sh
+```
+**用途**: 验证 TopoFR 代码集成正确，快速看到效果
+**时间**: ~12 小时
+**Epochs**: 10
+
+### 2️⃣ 完整训练 (生产环境)
+```bash
+cd /root/zhaokj/CVLface/cvlface/research/recognition/code/topofr
+bash train_topofr_e2e_full.sh
+```
+**用途**: 完整的 TopoFR 训练，获得最佳性能
+**时间**: ~25 小时
+**Epochs**: 20
+
+### 3️⃣ Baseline 对比
+```bash
+cd /root/zhaokj/CVLface/cvlface/research/recognition/code/topofr
+bash train_baseline_adaface_e2e.sh
+```
+**用途**: 训练 AdaFace baseline，用于对比 TopoFR 的提升
+**时间**: ~18 小时
+**Epochs**: 20
+
+## 📊 脚本对比表
+
+| 脚本 | 损失 | Epochs | LR调度 | 数据增强 | 时间 | 用途 |
+|------|------|--------|--------|---------|------|------|
+| e2e_full | TopoFR+AdaFace | 20 | Step | gridsample | ~25h | 生产 ⭐ |
+| e2e_quick | TopoFR+AdaFace | 10 | Step | basic | ~12h | 验证 ⚡ |
+| e2e_cosine | TopoFR+AdaFace | 30 | Cosine | gridsample | ~35h | 最佳 📈 |
+| baseline | AdaFace | 20 | Step | gridsample | ~18h | 对比 📊 |
+| 4-stage | TopoFR+AdaFace | 多阶段 | 各阶段不同 | 各阶段不同 | ~50h+ | 精细 🔧 |
+
+## 💡 使用建议
+
+### 情况1: 第一次使用 TopoFR
+```bash
+# Step 1: 快速验证
+bash train_topofr_e2e_quick.sh
+
+# Step 2: 检查结果
+# 如果效果好，继续完整训练
+
+# Step 3: 完整训练
+bash train_topofr_e2e_full.sh
+```
+
+### 情况2: 对比实验
+```bash
+# 并行运行 (如果有16卡)
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash train_baseline_adaface_e2e.sh &
+CUDA_VISIBLE_DEVICES=8,9,10,11,12,13,14,15 bash train_topofr_e2e_full.sh &
+
+# 或串行运行 (8卡)
+bash train_baseline_adaface_e2e.sh   # 先跑 baseline
+bash train_topofr_e2e_full.sh        # 再跑 TopoFR
+```
+
+### 情况3: 追求最佳性能
+```bash
+# 使用 Cosine 调度器 + 更多 epochs
+bash train_topofr_e2e_cosine.sh
+```
+
+### 情况4: 需要精细控制
+```bash
+# 使用多阶段训练
+bash train_topofr_0605.sh
+# 可以在每个阶段后暂停，检查结果再继续
+```
+
+## ⚙️ 自定义参数
+
+如果需要修改参数，直接编辑脚本或在命令行覆盖：
+
+```bash
+# 示例: 修改 batch size
+bash train_topofr_e2e_full.sh
+# 编辑脚本中的 trainers.batch_size=256 改为 128
+
+# 或在命令行添加参数
+fabric run --devices=8 train_opt.py \
+    losses=configs/topofr_adaface.yaml \
+    trainers.batch_size=128 \
+    # ... 其他参数
+```
+
+## 🔍 监控训练
+
+### 实时日志
+```bash
+# 查看最新实验
+ls -lt /data1/dataset_0605/train_output/ | head
+
+# 实时监控日志
+tail -f /data1/dataset_0605/train_output/topofr_*/logs/*.log
+```
+
+### TensorBoard
+```bash
+tensorboard --logdir=/data1/dataset_0605/train_output
+# 浏览器访问 http://localhost:6006
+```
+
+### GPU 监控
+```bash
+watch -n 1 nvidia-smi
+```
+
+## 📈 预期性能
+
+基于 TopoFR 论文的结果：
+
+```
+Baseline (AdaFace):       IJB-C@1e-5 = 94.5%
+TopoFR + AdaFace:         IJB-C@1e-5 = 95.0%  (+0.5%)
+TopoFR + AdaFace (30ep):  IJB-C@1e-5 = 95.3%  (+0.8%)
+```
+
+## ⚠️ 常见问题
+
+### Q1: OOM 错误
+```bash
+# 解决方案: 减小 batch size
+trainers.batch_size=128  # 或 192
+```
+
+### Q2: 训练太慢
+```bash
+# 解决方案1: 使用 quick 版本
+bash train_topofr_e2e_quick.sh
+
+# 解决方案2: 临时关闭拓扑损失
+# 编辑 losses/configs/topofr_adaface.yaml
+topo_weight: 0
+```
+
+### Q3: 不确定用哪个
+```bash
+# 首次使用: quick
+# 正式训练: full
+# 追求极致: cosine
+# 需要对比: baseline
+```
+
+## 📞 获取帮助
+
+查看详细文档:
+- E2E_TRAINING_GUIDE.md  - 端到端训练详细指南
+- TOPOFR_README.md       - TopoFR 使用手册
+- CHECKLIST.md           - 快速检查清单
+
+## ✅ 开始训练检查清单
+
+- [ ] 进入正确目录
+  ```bash
+  cd /root/zhaokj/CVLface/cvlface/research/recognition/code/topofr
+  ```
+
+- [ ] 激活 conda 环境
+  ```bash
+  conda activate cvlface
+  ```
+
+- [ ] 检查 GPU
+  ```bash
+  nvidia-smi
+  ```
+
+- [ ] 检查数据集
+  ```bash
+  ls /data1/dataset_0605/train_rec
+  ```
+
+- [ ] 选择脚本并运行
+  ```bash
+  bash train_topofr_e2e_full.sh  # 或其他脚本
+  ```
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          🚀 准备就绪，开始训练！                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝

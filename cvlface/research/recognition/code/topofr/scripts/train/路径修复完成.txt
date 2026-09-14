@@ -1,0 +1,29 @@
+## ✅ 路径修复完成
+
+所有训练脚本中的 anaconda 路径已修复：
+
+**修改内容**:
+- ❌ `/root/anaconda/bin/activate`
+- ✅ `/root/anaconda3/bin/activate`
+
+- ❌ `/root/anaconda/envs/cvlface/lib`
+- ✅ `/root/anaconda3/envs/cvlface/lib`
+
+**修复的脚本** (8个):
+1. train_topofr_from_pretrained.sh
+2. train_topofr_from_pretrained_quick.sh
+3. train_topofr_from_pretrained_aggressive.sh
+4. train_topofr_e2e_full.sh
+5. train_topofr_e2e_quick.sh
+6. train_topofr_e2e_cosine.sh
+7. train_baseline_adaface_e2e.sh
+8. train_topofr_0605.sh
+
+## 🚀 现在可以正常运行
+
+```bash
+cd /root/zhaokj/CVLface/cvlface/research/recognition/code/topofr/scripts/train
+bash train_topofr_from_pretrained_quick.sh
+```
+
+应该可以正常启动了！
