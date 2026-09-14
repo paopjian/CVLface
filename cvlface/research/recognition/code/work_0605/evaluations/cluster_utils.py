@@ -20,6 +20,7 @@ import threading
 import multiprocessing as mp
 from collections import defaultdict, Counter
 import heapq
+import queue
 
 from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
 import onnxruntime as ort
@@ -2123,6 +2124,488 @@ def get_sim_matrix_large_scale_v5(
     # 结果聚合
     total_pos_hist = torch.zeros(hist_bins, dtype=torch.long)
     total_neg_hist = torch.zeros(hist_bins, dtype=torch.long)
+    for p_hist, n_hist in results:
+        total_pos_hist += p_hist
+        total_neg_hist += n_hist
+
+    print(f"Total Pos Pairs: {total_pos_hist.sum().item()}")
+    print(f"Total Neg Pairs: {total_neg_hist.sum().item()}")
+
+    if collect_pairs_config is not None:
+        if is_dual_mode:
+            pos_collected = pos_pair_collector.get_pairs() if pos_pair_collector else []
+            neg_collected = neg_pair_collector.get_pairs() if neg_pair_collector else []
+            if pos_collected:
+                pos_tmode = collect_pairs_config['pos'].get('threshold_mode', 'below')
+                pos_collected.sort(key=lambda x: x[2], reverse=(pos_tmode == 'above'))
+                print(f"Collected POS Pairs: {len(pos_collected)}")
+            if neg_collected:
+                neg_tmode = collect_pairs_config['neg'].get('threshold_mode', 'above')
+                neg_collected.sort(key=lambda x: x[2], reverse=(neg_tmode == 'above'))
+                print(f"Collected NEG Pairs: {len(neg_collected)}")
+            return total_pos_hist.numpy(), total_neg_hist.numpy(), pos_collected, neg_collected
+        else:
+            collected_pairs = pair_collector.get_pairs()
+            threshold_mode = collect_pairs_config.get('threshold_mode', 'above')
+            collected_pairs.sort(key=lambda x: x[2], reverse=(threshold_mode == 'above'))
+            print(f"Collected Pairs: {len(collected_pairs)}")
+            return total_pos_hist.numpy(), total_neg_hist.numpy(), collected_pairs
+
+    return total_pos_hist.numpy(), total_neg_hist.numpy()
+
+
+# ============================================================
+# v6：大规模相似度正/负样本直方图（排序友好 + skip_pos_check + tf32 +
+#     cudaHostRegister 零拷贝 + row_cache + 单趟直方图；triton 融合核已移除）
+# ============================================================
+def _collect_tile_pairs(sim, mask_2d, row_start, col_start, pair_collector):
+    """从 2D sim 矩阵中按掩码收集样本对 (global_i, global_j, score)。"""
+    if pair_collector.is_full():
+        return
+    rows, cols = torch.where(mask_2d)
+    if rows.numel() == 0:
+        return
+    scores = sim[rows, cols]
+    global_i = (rows + row_start).cpu().numpy()
+    global_j = (cols + col_start).cpu().numpy()
+    scores_cpu = scores.cpu().numpy()
+    pair_collector.add_pairs(list(zip(global_i, global_j, scores_cpu)))
+
+# ============================================================
+# 静态预标含正样本 tile（deepseek-pro 式）
+# ============================================================
+def _pos_tile_flags(ids, block_size, n):
+    """静态判定哪些上三角块 (bi,bj) 含 >=1 条同身份样本对（保守：绝不漏标）。
+
+    对角块：块内某身份 >=2 个成员；非对角：某身份成员跨越块 [bf,bl] 时标记其间
+    全部 (b1<b2)。热路径据此跳过无正样本 tile 的身份等值比对。
+    """
+    nb = math.ceil(n / block_size)
+    flags = set()
+    if n < 2:
+        return flags
+    ids = np.asarray(ids)
+    for bi in range(nb):
+        b0, b1 = bi * block_size, min((bi + 1) * block_size, n)
+        _, cnt = np.unique(ids[b0:b1], return_counts=True)
+        if cnt.size and int(cnt.max()) >= 2:
+            flags.add((bi, bi))
+    order = np.argsort(ids, kind='stable')
+    sid = ids[order]
+    starts = np.r_[0, np.flatnonzero(sid[1:] != sid[:-1]) + 1, n]
+    for s, e in zip(starts[:-1], starts[1:]):
+        if e - s < 2:
+            continue
+        bf = int(order[s]) // block_size
+        bl = int(order[e - 1]) // block_size
+        if bl > bf:
+            for b1 in range(bf, bl):
+                for b2 in range(b1 + 1, bl + 1):
+                    flags.add((b1, b2))
+    return flags
+
+# ============================================================
+# GPU worker
+# ============================================================
+def _gpu_worker(
+    feats, ids, tile_q, gpu_id, block_size, n,
+    hist_bins, hist_range,
+    collect_pairs_config, pair_collector, pos_pair_collector, neg_pair_collector,
+    memory_mode, precision, row_cache, hist_method, pbar, pbar_lock, out, slot,
+    shard_blocks=None, skip_clamp=True,
+):
+    """单卡 worker（线程）：单 tile 动态队列 + 行块缓存 + 单趟直方图(neg=full-pos)。
+
+    memory_mode='shard' 时，shard_blocks 为本卡数据库分片
+    （list[(global_block_idx, cpu_pinned_view)]，覆盖 global 列块 bj ≡ slot (mod G)），
+    tile 已由主入口按归属路由到本卡队列。
+    """
+    with torch.cuda.device(gpu_id):
+        device = torch.device(f'cuda:{gpu_id}')
+        LO, HI = float(hist_range[0]), float(hist_range[1])
+        skip_clamp_lost = [0, 0]             # [full 丢的越界数, pos 丢的越界数]
+        FILL = LO - 2.0                     # 越界填充值，histc 会丢弃
+        scale = hist_bins / 2.0             # 量化 scale（bincount 用）
+        use_bincount = (hist_method == 'bincount')
+
+        # ---- 精度设置：fp32(关TF32) / tf32 / fp16 ----
+        use_fp16 = (precision == 'fp16')
+        use_tf32 = (precision == 'tf32')
+        torch.backends.cuda.matmul.allow_tf32 = use_tf32
+
+        ids_full = torch.as_tensor(ids, device=device)   # (N,) 常驻显存
+
+
+        use_shard = (memory_mode == 'shard')
+        use_gpu_feats = (memory_mode == 'high_performance')
+        if use_gpu_feats:
+            feats_source = feats.to(device)              # 特征常驻显存
+        else:
+            feats_source = feats                         # pinned CPU，按需 H2D
+
+        # ---- shard 模式：上传本卡数据库分片（global 列块 → 显存）----
+        shard_map = None
+        if use_shard:
+            shard_map = {}
+            for blk, cpu_view in shard_blocks:
+                shard_map[blk] = cpu_view.to(device, non_blocking=True)
+            torch.cuda.current_stream().synchronize()
+
+        # ---- 解析样本对收集配置 ----
+        do_collect_single = False
+        do_collect_dual = False
+        sample_type = threshold_mode = threshold_val = None
+        pos_cfg = neg_cfg = None
+        if collect_pairs_config is not None:
+            if 'pos' in collect_pairs_config or 'neg' in collect_pairs_config:
+                do_collect_dual = True
+                pos_cfg = collect_pairs_config.get('pos', None)
+                neg_cfg = collect_pairs_config.get('neg', None)
+            elif pair_collector is not None:
+                do_collect_single = True
+                sample_type = collect_pairs_config.get('sample_type', 'neg')
+                threshold_mode = collect_pairs_config.get('threshold_mode', 'above')
+                threshold_val = collect_pairs_config.get('threshold', 0.5)
+        need_collect = (do_collect_single or do_collect_dual)
+
+        pos_hist = torch.zeros(hist_bins, device=device, dtype=torch.int64)
+        neg_hist = torch.zeros(hist_bins, device=device, dtype=torch.int64)
+
+        # 行块缓存（low_memory 下避免同一行块重复 H2D）
+        cached_bi = -1
+        cached_row = None
+
+        while True:
+            tile = tile_q.get()
+            if tile is None:
+                break
+            bi, bj, has_pos = tile
+            r0, r1 = bi * block_size, min((bi + 1) * block_size, n)
+            c0, c1 = bj * block_size, min((bj + 1) * block_size, n)
+            is_diag = (bi == bj)
+
+            # 行块：缓存命中复用，否则 H2D（或显存切片 / shard 查表）
+            if use_gpu_feats:
+                block1 = feats_source[r0:r1]
+            elif use_shard and is_diag:
+                block1 = shard_map[bi]                   # 对角 tile：本卡必拥有 bi 列块
+            elif row_cache and bi == cached_bi:
+                block1 = cached_row
+            else:
+                block1 = feats_source[r0:r1].to(device, non_blocking=True)
+                if row_cache:
+                    cached_bi, cached_row = bi, block1
+
+            # 列块：对角块复用行块，否则显存切片 / shard 查表 / H2D
+            if is_diag:
+                block2 = block1
+            elif use_gpu_feats:
+                block2 = feats_source[c0:c1]
+            elif use_shard:
+                block2 = shard_map[bj]                   # tile 已路由到 bj 的归属卡
+            else:
+                block2 = feats_source[c0:c1].to(device, non_blocking=True)
+
+            # matmul
+            if use_fp16:
+                sim = torch.matmul(block1.half(), block2.half().T).float()
+            else:
+                sim = torch.matmul(block1, block2.T)     # fp32 / tf32
+
+                if not skip_clamp:          # fp16 归一化点积越界概率极低, 跳过省一趟读写
+                    sim.clamp_(LO, HI)
+
+                # 身份等值掩码：仅本 tile 含正样本对 或 需要收集样本对 时才计算
+                if has_pos or need_collect:
+                    label_eq = (ids_full[r0:r1, None] == ids_full[None, c0:c1])
+                else:
+                    label_eq = None
+
+                if is_diag:
+                    triu = torch.triu(
+                        torch.ones(r1 - r0, c1 - c0, device=device, dtype=torch.bool),
+                        diagonal=1)
+
+                # skip_clamp 守恒补偿预统计: 本 tile 应有对数/同 ID 对数
+                # (histc 丢弃的越界值最终补回边界 bin, 语义等价 "越界算 ±1")
+                n_valid = n_same = -1
+                if skip_clamp and not use_bincount:
+                    if is_diag:
+                        n_valid = (r1 - r0) * (r1 - r0 - 1) // 2
+                        n_same = (int(label_eq.sum().item()) - (r1 - r0)) // 2 \
+                            if label_eq is not None else 0
+                    else:
+                        n_valid = (r1 - r0) * (c1 - c0)
+                        n_same = int(label_eq.sum().item()) \
+                            if label_eq is not None else 0
+
+                # 单趟直方图前半：full（对角块先把下三角填范围外）
+                if use_bincount:
+                    q = ((sim + 1.0) * scale).floor_().clamp_(0, hist_bins - 1).to(torch.int32)
+                    if is_diag:
+                        full_hist = torch.bincount(q[triu], minlength=hist_bins).to(torch.int64)
+                    else:
+                        full_hist = torch.bincount(q.reshape(-1), minlength=hist_bins).to(torch.int64)
+                else:
+                    if is_diag:
+                        sim.masked_fill_(~triu, FILL)
+                    full_hist = torch.histc(sim, bins=hist_bins, min=LO, max=HI).to(torch.int64)
+                    if n_valid >= 0:
+                        lost = n_valid - int(full_hist.sum().item())
+                        if lost > 0:
+                            full_hist[hist_bins - 1] += lost
+                            skip_clamp_lost[0] += lost
+
+                # 样本对收集：在 pos 的 in-place masked_fill 之前做，直接用 sim（省掉整份 clone）
+                if need_collect:
+                    if is_diag:
+                        valid_mask = triu
+                    else:
+                        valid_mask = torch.ones(r1 - r0, c1 - c0, device=device, dtype=torch.bool)
+
+                    if do_collect_single and not pair_collector.is_full():
+                        base = label_eq if sample_type == 'pos' else ~label_eq
+                        target = (base & valid_mask & (sim > threshold_val)) \
+                            if threshold_mode == 'above' else (base & valid_mask & (sim < threshold_val))
+                        _collect_pairs(sim, target, r0, c0, pair_collector)
+                        del target
+
+                    if do_collect_dual:
+                        if pos_cfg and pos_pair_collector and not pos_pair_collector.is_full():
+                            pt = pos_cfg.get('threshold_mode', 'below')
+                            pv = pos_cfg.get('threshold', 0.25)
+                            cond = sim > pv if pt == 'above' else sim < pv
+                            _collect_pairs(sim, label_eq & valid_mask & cond,
+                                           r0, c0, pos_pair_collector)
+                        if neg_cfg and neg_pair_collector and not neg_pair_collector.is_full():
+                            nt = neg_cfg.get('threshold_mode', 'above')
+                            nv = neg_cfg.get('threshold', 0.5)
+                            cond = sim > nv if nt == 'above' else sim < nv
+                            _collect_pairs(sim, (~label_eq) & valid_mask & cond,
+                                           r0, c0, neg_pair_collector)
+
+                    del valid_mask
+
+                # 单趟直方图后半：pos + neg = full - pos
+                if use_bincount:
+                    pos_block = None
+                    if has_pos:
+                        sel = (triu & label_eq) if is_diag else label_eq
+                        pos_block = torch.bincount(q[sel], minlength=hist_bins).to(torch.int64)
+                        del sel
+                    del q
+                else:
+                    pos_block = None
+                    if has_pos:
+                        sim.masked_fill_(~label_eq, FILL)
+                        pos_block = torch.histc(sim, bins=hist_bins, min=LO, max=HI).to(torch.int64)
+                        if n_same >= 0:
+                            lost_p = n_same - int(pos_block.sum().item())
+                            if lost_p > 0:
+                                pos_block[hist_bins - 1] += lost_p
+                                skip_clamp_lost[1] += lost_p
+
+                if pos_block is not None:
+                    pos_hist += pos_block
+                    neg_hist += full_hist - pos_block
+                    del pos_block
+                else:
+                    neg_hist += full_hist
+                del full_hist
+                if label_eq is not None:
+                    del label_eq
+                if is_diag:
+                    del triu
+            del sim
+
+            if pbar is not None:
+                with pbar_lock:
+                    pbar.update(1)
+
+        out[slot] = (pos_hist.cpu(), neg_hist.cpu())
+
+
+
+# ============================================================
+# 主入口
+# ============================================================
+def get_sim_matrix_large_scale_v6(
+    query_feats_list, query_ids=None, num_gpus=7, block_size=16384,
+    hist_bins=200_000, hist_range=(-1.0, 1.0),
+    collect_pairs_config=None, memory_mode='low_memory', show_progress=True,
+    precision='tf32', row_cache=True, pin_inplace=True,
+    hist_method='histc', skip_pos_check=True,
+    # 越界算 ±1 (守恒补偿), 免一趟全量 clamp 读写; 缩窄 hist_range 做局部直方图时须显式传 False
+    skip_clamp=True,
+):
+    """
+    大规模相似度矩阵正/负样本直方图（v6，多线程 + low_memory + tf32）。
+
+    Args:
+        query_feats_list: (N, D) float32，L2 归一化特征（numpy / list / torch.Tensor）。
+        query_ids:        (N,) int64 身份标签；None 时视为全部不同身份。
+        num_gpus:         使用的 GPU 数（cuda:0 .. cuda:num_gpus-1）。
+        block_size:       分块大小（默认 16384，越大 GEMM 越高效）。
+        hist_bins:        直方图 bin 数（默认 200_000，覆盖 hist_range）。
+        hist_range:       (min, max)（默认 (-1, 1)，余弦相似度）。
+        collect_pairs_config: 可选样本对收集，见 v5 语义：
+            {'sample_type':'neg', 'threshold_mode':'above', 'threshold':0.5, 'max_pairs':1000}
+            或双模式 {'pos':{...}, 'neg':{...}}。
+        memory_mode:      'low_memory'（特征放 CPU 按需 H2D，显存不足用）
+                          或 'high_performance'（特征常驻显存，更快但需显存装得下）
+                          或 'shard'（每卡常驻 1/G 数据库分片 + tile 按列归属路由，
+                          大 N 下避免 low_memory 的 O(nb²) 列块 PCIe 传输，N 上千万用）。
+        show_progress:    是否显示进度条（依赖 tqdm）。
+        precision:        'fp32'(全精度) / 'tf32'(默认，快 ~12%，本任务实测 0 bin 差) / 'fp16'。
+        row_cache:        low_memory 下缓存行块，避免同一行块重复 H2D。
+        pin_inplace:      True 用 cudaHostRegister 原地锁定 numpy（零拷贝，省一份内存）；
+                          False 用 pin_memory()（拷贝一份到页锁定内存）。
+        hist_method:      'histc'（默认，实测更快）或 'bincount'（量化+GPU bincount，备选）。
+        skip_pos_check:   静态预标含正样本 tile，热路径对无正样本 tile 免身份等值比对。
+
+    Returns:
+        (pos_hist, neg_hist) 两个 np.int64 (hist_bins,)；neg = 全体 - 正样本，逐 bin 非负。
+        若给 collect_pairs_config 则额外返回收集到的样本对列表。
+    """
+    if precision not in ('fp32', 'tf32', 'fp16'):
+        raise ValueError(f"precision 必须是 'fp32'/'tf32'/'fp16'，收到 {precision!r}")
+
+    if precision == 'fp16' and hist_bins > 2000:
+        print(f"[V6建议] fp16 有效分辨率约 0.001，当前 hist_bins={hist_bins:,} 偏细，"
+              f"如需最佳性能可设 2000（当前仍按 {hist_bins:,} 计算）")
+
+    if query_ids is None:
+        query_ids = np.arange(len(query_feats_list))
+    N = len(query_ids)
+
+    # ---- 准备数据 ----
+    if isinstance(query_feats_list, list):
+        query_feats_tensor = torch.from_numpy(np.array(query_feats_list))
+    elif isinstance(query_feats_list, np.ndarray):
+        query_feats_tensor = torch.from_numpy(query_feats_list)
+    else:
+        query_feats_tensor = query_feats_list
+
+    registered_ptr = None
+    if memory_mode in ('low_memory', 'shard'):
+        if query_feats_tensor.is_cuda:
+            query_feats_tensor = query_feats_tensor.cpu()
+        if pin_inplace and isinstance(query_feats_list, np.ndarray):
+            # 原地锁定 numpy 缓冲区（零拷贝），避免 pin_memory() 的整份 pinned 副本
+            arr = np.ascontiguousarray(query_feats_list, dtype=np.float32)
+            ptr = arr.ctypes.data
+            torch.cuda.cudart().cudaHostRegister(ptr, arr.nbytes, 0)
+            registered_ptr = ptr
+            query_feats_tensor = torch.from_numpy(arr).float().contiguous()
+        else:
+            query_feats_tensor = query_feats_tensor.float().contiguous().pin_memory()
+    else:
+        if not query_feats_tensor.is_cuda:
+            query_feats_tensor = query_feats_tensor.float().pin_memory()
+
+    # ---- 静态预标含正样本 tile（deepseek-pro 式，热路径免身份比对）----
+    if skip_pos_check:
+        flags = _pos_tile_flags(np.asarray(query_ids), block_size, N)
+    else:
+        flags = None
+
+    # ---- 建 tile 队列：行块序 + 行内宽优先（利于行块缓存 + 大块优先）----
+    nb = math.ceil(N / block_size)
+    tiles = []
+    for bi in range(nb):
+        for bj in range(bi, nb):
+            has_pos = (flags is None) or ((bi, bj) in flags)
+            tiles.append((bi, bj, has_pos))
+    tiles.sort(key=lambda t: (t[0], -(t[1] - t[0])))
+    n_pos_tiles = sum(1 for t in tiles if t[2]) if flags is not None else len(tiles)
+    print(f"V6 tile 队列: 共 {len(tiles)} 块(含正样本 {n_pos_tiles}), block={block_size}, "
+          f"precision={precision}, hist={hist_method}, row_cache={row_cache}, mode={memory_mode}")
+
+    use_shard = (memory_mode == 'shard')
+    if use_shard:
+        # 每卡常驻数据库分片（列块 bj ≡ g (mod G)），tile 按归属路由到对应卡
+        shard_blocks_per_gpu = []
+        for g in range(num_gpus):
+            owned = [(b, query_feats_tensor[b * block_size:min((b + 1) * block_size, N)])
+                     for b in range(g, nb, num_gpus)]
+            shard_blocks_per_gpu.append(owned)
+        tile_queues = []
+        for _ in range(num_gpus):
+            tile_queues.append(queue.Queue())
+        for t in tiles:
+            bi, bj, _ = t
+            tile_queues[(bi if bi == bj else bj) % num_gpus].put(t)
+        for q in tile_queues:
+            q.put(None)
+    else:
+        tile_queues = [queue.Queue()]
+        for t in tiles:
+            tile_queues[0].put(t)
+        for _ in range(num_gpus):
+            tile_queues[0].put(None)
+
+    # ---- 收集器准备 ----
+    pair_collector = pos_pair_collector = neg_pair_collector = None
+    is_dual_mode = False
+    if collect_pairs_config is not None:
+        if 'pos' in collect_pairs_config or 'neg' in collect_pairs_config:
+            is_dual_mode = True
+            if 'pos' in collect_pairs_config:
+                pos_pair_collector = PairCollector(
+                    max_pairs=collect_pairs_config['pos'].get('max_pairs', -1))
+            if 'neg' in collect_pairs_config:
+                neg_pair_collector = PairCollector(
+                    max_pairs=collect_pairs_config['neg'].get('max_pairs', -1))
+        else:
+            pair_collector = PairCollector(
+                max_pairs=collect_pairs_config.get('max_pairs', -1))
+
+    start = time.time()
+    pbar = tqdm(total=len(tiles), desc="Matrix Cal v6", disable=not show_progress) \
+        if (show_progress and tqdm is not None) else None
+    pbar_lock = threading.Lock()
+
+    out = [None] * num_gpus
+    threads = []
+    try:
+        for gpu_id in range(num_gpus):
+            th = threading.Thread(
+                target=_gpu_worker,
+                args=(query_feats_tensor, query_ids,
+                      tile_queues[gpu_id] if use_shard else tile_queues[0],
+                      gpu_id, block_size, N,
+                      hist_bins, hist_range, collect_pairs_config,
+                      pair_collector, pos_pair_collector, neg_pair_collector,
+                      memory_mode, precision, row_cache, hist_method,
+                      pbar, pbar_lock, out, gpu_id,
+                      shard_blocks_per_gpu[gpu_id] if use_shard else None,
+                      skip_clamp),
+                name=f'v6-gpu-{gpu_id}',
+            )
+            th.start()
+            threads.append(th)
+        for th in threads:
+            th.join()
+    finally:
+        if registered_ptr is not None:
+            torch.cuda.cudart().cudaHostUnregister(registered_ptr)
+    if pbar is not None:
+        pbar.close()
+
+    results = []
+    for r in out:
+        if r is None or isinstance(r, Exception):
+            raise RuntimeError(f'V6 worker 失败: {r!r}')
+        results.append(r)
+
+    print(f"计算总耗时: {time.time() - start:.2f} 秒")
+
+    for gid in range(num_gpus):
+        with torch.cuda.device(gid):
+            torch.cuda.empty_cache()
+
+    total_pos_hist = torch.zeros(hist_bins, dtype=torch.int64)
+    total_neg_hist = torch.zeros(hist_bins, dtype=torch.int64)
     for p_hist, n_hist in results:
         total_pos_hist += p_hist
         total_neg_hist += n_hist
