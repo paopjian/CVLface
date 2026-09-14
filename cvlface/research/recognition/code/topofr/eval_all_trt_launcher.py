@@ -73,7 +73,7 @@ def find_existing_run(project_name, run_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_gpu', type=int, default=7)
+    parser.add_argument('--num_gpu', type=int, default=8)
     parser.add_argument('--eval_config_name', type=str, default='test_20260605')
     parser.add_argument('--ckpt_dir', type=str, required=True)
     parser.add_argument('--name', type=str, required=True)
@@ -138,7 +138,7 @@ if __name__ == '__main__':
         env = os.environ.copy()
         gpu_list = ','.join(str(i) for i in range(args.num_gpu))
         env['CUDA_VISIBLE_DEVICES'] = gpu_list
-        env['LD_LIBRARY_PATH'] = f"/root/miniconda3/envs/cvlface/lib:{env.get('LD_LIBRARY_PATH', '')}"
+        env['LD_LIBRARY_PATH'] = f"/root/anaconda3/envs/cvlface/lib:{env.get('LD_LIBRARY_PATH', '')}"
 
         timeout_sec = args.timeout_minutes * 60
         success = False

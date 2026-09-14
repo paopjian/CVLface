@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore", message=".*legacy TorchScript-based ONNX.*")
 import numpy as np
 np.bool = np.bool_
 
+import cv2
 import torch
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, DistributedSampler
@@ -40,17 +41,23 @@ from evaluations.custom_verification_evaluator import (
     IndexedDataset,
 )
 from evaluations.verifications.verification import calculate_roc2
-from evaluations.cluster_utils import get_sim_matrix_large_scale_v5
+from evaluations.cluster_utils import get_sim_matrix_large_scale_v6
 from evaluations.ijbbc.evaluate import evaluate as ijbbc_evaluate
 from evaluations.tinyface.evaluate import evaluate as tinyface_evaluate
-from evaluations.custom_ijbbc_evaluator import get_pairs_data, compute_tpir_from_heap
-from evaluations.cluster_utils import get_sim_matrix_batch_balanced_silent
+from evaluations.custom_ijbbc_evaluator import get_pairs_data
 from dataset.base_dataset import MXFaceDataset
 
 
-BATCH_SIZE = 256
-NUM_WORKERS = 5
+BATCH_SIZE = int(os.environ.get('TRT_BATCH_SIZE', '256'))
+NUM_WORKERS = int(os.environ.get('TRT_NUM_WORKERS', '10'))
 SHM_DIR = '/dev/shm/eval3_trt'
+
+
+def _decode_rgb_u8_to_normalized(img_bgr_or_rgb):
+    """cv2 BGR 图 → [-1,1] CHW float32 (与 ToTensor+Normalize(0.5,0.5) 位等价)"""
+    img = cv2.cvtColor(img_bgr_or_rgb, cv2.COLOR_BGR2RGB)
+    x = img.astype(np.float32) / 255.0
+    return torch.from_numpy((x - 0.5) / 0.5).permute(2, 0, 1)
 
 
 def _collate_fn(examples):
@@ -164,11 +171,15 @@ def get_transform():
 
 
 class HFIndexedDataset(torch.utils.data.Dataset):
-    """HuggingFace Dataset 适配器 (用于 IJB-C 等 arrow 格式数据集)"""
-    def __init__(self, data_path, transform, with_path=False):
-        from datasets import Dataset as HFDataset
-        self.dataset = HFDataset.load_from_disk(data_path)
-        self.transform = transform
+    """HuggingFace Dataset 适配器 (用于 IJB-C 等 arrow 格式数据集)
+
+    decode=False 只取压缩 bytes, worker 内 cv2 解码 + 手工归一化
+    (免 PIL/transforms, 单线程解码 ~1.6x, 端到端 ~1.3x; 输出与原链路位一致)
+    """
+    def __init__(self, data_path, transform=None, with_path=False):
+        from datasets import Dataset as HFDataset, Image as HFImage
+        ds = HFDataset.load_from_disk(data_path)
+        self.dataset = ds.cast_column('image', HFImage(decode=False))
         self.with_path = with_path
 
     def __len__(self):
@@ -176,8 +187,9 @@ class HFIndexedDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
-        image = item['image'].convert('RGB')
-        pixel_values = self.transform(image)
+        raw = item['image']['bytes']
+        img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        pixel_values = _decode_rgb_u8_to_normalized(img)
         index = item['index']
         result = {"pixel_values": pixel_values, "index": index}
         if self.with_path:
@@ -189,6 +201,41 @@ def _collate_hf(examples):
     pixel_values = torch.stack([e["pixel_values"] for e in examples])
     indexes = torch.tensor([e["index"] for e in examples])
     return {"pixel_values": pixel_values, "index": indexes}
+
+
+class FastImageFolderDataset(torch.utils.data.Dataset):
+    """cv2 直读 ImageFolder 结构 (根目录/身份目录/图片.jpg)
+
+    label 编号与 torchvision.ImageFolder 一致 (按目录名排序);
+    worker 内 cv2 解码 + 手工归一化, 免 PIL/transforms 开销
+    """
+    IMG_EXTS = ('.jpg', '.jpeg', '.png', '.bmp')
+
+    def __init__(self, root):
+        self.samples = []
+        classes = sorted(d for d in os.listdir(root)
+                         if os.path.isdir(os.path.join(root, d)))
+        class_to_idx = {c: i for i, c in enumerate(classes)}
+        for c in classes:
+            cdir = os.path.join(root, c)
+            for fname in sorted(os.listdir(cdir)):
+                if fname.lower().endswith(self.IMG_EXTS):
+                    self.samples.append((os.path.join(cdir, fname),
+                                         class_to_idx[c]))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
+        if img is None:
+            raise IOError(f"无法读取图片: {path}")
+        return {
+            "pixel_values": _decode_rgb_u8_to_normalized(img),
+            "label": label,
+            "index": idx,
+        }
 
 
 def _collate_tf(examples):
@@ -208,7 +255,8 @@ def worker_extract_hf(rank, world_size, engine_path, dataset_path, shm_path):
 
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler,
                             num_workers=NUM_WORKERS, collate_fn=_collate_hf,
-                            pin_memory=True, persistent_workers=True)
+                            pin_memory=True, persistent_workers=True,
+                            multiprocessing_context='fork')
 
     infer = TRTInfer(engine_path, batch_size=BATCH_SIZE)
 
@@ -250,7 +298,8 @@ def worker_extract_hf_tinyface(rank, world_size, engine_path, dataset_path, shm_
 
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler,
                             num_workers=NUM_WORKERS, collate_fn=_collate_tf,
-                            pin_memory=True, persistent_workers=True)
+                            pin_memory=True, persistent_workers=True,
+                            multiprocessing_context='fork')
 
     infer = TRTInfer(engine_path, batch_size=BATCH_SIZE)
 
@@ -388,27 +437,25 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
     total_pos_pairs = sum(c * (c - 1) // 2 for c in counts)
     total_neg_pairs = total_pairs - total_pos_pairs
 
-    max_far = max(target_fars)
-    topk = max(int(total_neg_pairs * max_far), 1000)
-
     print(f"  总对数: {total_pairs}, 正样本: {total_pos_pairs}, 负样本: {total_neg_pairs}")
-    print(f"  维护 top-{topk} 负样本分数")
 
-    pos_scores, neg_scores, _ = get_sim_matrix_batch_balanced_silent(
+    # v6 直方图引擎 (tf32 + skip_clamp, 200k bins): 相比旧堆引擎 ~41x,
+    # far>=1e-8 与堆版一致 (<0.02); 1e-10/1e-9 端点受直方图分辨率限制有
+    # ~0.25 偏差 (绝对值本就 <0.6), PoC 对拍见 opt_eval/tensorrt/ijbc_v6hist_poc.py
+    pos_hist, neg_hist = get_sim_matrix_large_scale_v6(
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
-        block_size=2048 * 5,
-        topk=topk,
-        threshold=None,
+        block_size=2048 * 16,
         show_progress=True,
-        return_stats_only=False,
-        return_pairs_only=False
+        hist_bins=200_000,
+        hist_range=(-1.0, 1.0),
+        precision='tf32',
+        skip_clamp=True,
     )
-
-    print(f"  正样本对: {len(pos_scores)}, 负样本对(topk): {len(neg_scores)}")
-
-    result_all, _ = compute_tpir_from_heap(neg_scores, pos_scores, total_neg_pairs, target_fars)
+    result_all, _ = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=200_000,
+                                           hist_range=(-1.0, 1.0),
+                                           target_fars=target_fars)
     print(f"  全量结果: {result_all}")
 
     # 001 子集 (如果文件存在)
@@ -445,21 +492,21 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
             unique_ids_001, counts_001 = np.unique(query_ids_001, return_counts=True)
             total_pos_001 = sum(c * (c - 1) // 2 for c in counts_001)
             total_neg_001 = total_pairs_001 - total_pos_001
-            topk_001 = max(int(total_neg_001 * max_far), 1000)
 
-            pos_scores_001, neg_scores_001, _ = get_sim_matrix_batch_balanced_silent(
+            pos_hist_001, neg_hist_001 = get_sim_matrix_large_scale_v6(
                 query_feats_list=image_feat_001,
                 query_ids=query_ids_001,
                 num_gpus=num_gpus,
-                block_size=2048 * 5,
-                topk=topk_001,
-                threshold=None,
+                block_size=2048 * 16,
                 show_progress=True,
-                return_stats_only=False,
-                return_pairs_only=False
+                hist_bins=200_000,
+                hist_range=(-1.0, 1.0),
+                precision='tf32',
+                skip_clamp=True,
             )
-            result_001, _ = compute_tpir_from_heap(
-                neg_scores_001, pos_scores_001, total_neg_001, target_fars)
+            result_001, _ = compute_tpir_from_hist(
+                pos_hist_001, neg_hist_001, hist_bins=200_000,
+                hist_range=(-1.0, 1.0), target_fars=target_fars)
             print(f"  001子集结果: {result_001}")
         else:
             result_001 = {}
@@ -497,19 +544,23 @@ def worker_extract(rank, world_size, engine_path, dataset_path, shm_path):
     # Load dataset
     transform = get_transform()
     rec_path = os.path.join(dataset_path, 'train.rec')
+    mp_ctx = None
     if os.path.exists(rec_path):
+        # MXFaceDataset(rec) 分支: mxnet 对 fork 不安全, 保持默认 spawn
         mx_dataset = MXFaceDataset(root_dir=dataset_path, local_rank=0)
         mx_dataset.transform = transform
+        dataset = IndexedDataset(mx_dataset)
     else:
-        from torchvision.datasets import ImageFolder as TVImageFolder
-        mx_dataset = TVImageFolder(dataset_path, transform=transform)
-
-    dataset = IndexedDataset(mx_dataset)
+        dataset = FastImageFolderDataset(dataset_path)
+        # fork 免除 dataset 的 spawn pickle (千万级文件列表 pickle 可达 GB 级,
+        # 实测 test_1201 首批等待 96.9s -> 0.6s); dataloader worker 仅 CPU 解码, fork 安全
+        mp_ctx = 'fork'
     sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=False)
 
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler,
                             num_workers=NUM_WORKERS, collate_fn=_collate_fn,
-                            pin_memory=True, persistent_workers=True)
+                            pin_memory=True, persistent_workers=True,
+                            multiprocessing_context=mp_ctx)
 
     # Load TRT engine
     infer = TRTInfer(engine_path, batch_size=BATCH_SIZE)
@@ -581,21 +632,78 @@ def gather_and_deduplicate(shm_path, world_size):
 
 
 def compute_metric_type4(embeddings, query_ids, num_gpus):
-    """type=4: large scale matrix + TPIR"""
+    """type=4: large scale matrix + TPIR（v6 直方图, skip_clamp 守恒补偿）"""
     target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
-    pos_hist, neg_hist = get_sim_matrix_large_scale_v5(
+    t_sim = time.time()
+    pos_hist, neg_hist = get_sim_matrix_large_scale_v6(
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
         block_size=2048 * 16,
         show_progress=True,
         hist_bins=2000,
-        precision='fp16'
+        precision='tf32',
+        skip_clamp=True,
     )
+    print(f"  sim_matrix (get_sim_matrix_large_scale_v6) 耗时: {time.time()-t_sim:.1f}s")
     result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, target_fars=target_fars)
     print('result:', result)
     print('thresholds:', thresholds)
     return result
+
+
+def compute_metric_type4_v6_matrix(embeddings, query_ids, num_gpus,
+                                   precisions=('fp16', 'tf32'),
+                                   epilogues=('torch', 'triton'),
+                                   use_shard=False, use_skip_clamp=False,
+                                   block_size=2048 * 16, hist_bins=2000):
+    """v6 配置矩阵: {precisions} × {epilogues} (+shard/+skip_clamp 优化尝试),
+    不收集样本对, 每配置独立计时, 直方图互相逐 bin 对拍。返回首个配置的 TPIR 结果。"""
+    _, counts = np.unique(query_ids, return_counts=True)
+    truth_pos = int((counts * (counts - 1) // 2).sum())
+    target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
+
+    cfgs = [(f"v6_{p}_{e}", dict(precision=p, epilogue=e))
+            for p in precisions for e in epilogues]
+    if use_shard:
+        cfgs.append(("v6_fp16_shard_torch", dict(
+            precision='fp16', epilogue='torch', memory_mode='shard')))
+    if use_skip_clamp:
+        cfgs.append(("v6_fp16_torch_noclamp", dict(
+            precision='fp16', epilogue='torch', skip_clamp=True)))
+
+    rows, ref = [], None
+    result0 = None
+    for name, kw in cfgs:
+        torch.cuda.synchronize()
+        t0 = time.time()
+        ph, nh = get_sim_matrix_large_scale_v6(
+            query_feats_list=embeddings, query_ids=query_ids,
+            num_gpus=num_gpus, block_size=block_size,
+            hist_bins=hist_bins, hist_range=(-1.0, 1.0),
+            show_progress=False, **kw)
+        dt = time.time() - t0
+        pairs = len(query_ids) * (len(query_ids) - 1) // 2
+        pos_sum = int(ph.sum())
+        diff = pos_sum - truth_pos
+        print(f"  [{name}] {dt:.1f}s  {pairs/dt:.3e} 对/s  "
+              f"pos={pos_sum:,} (真值差 {diff:+,})", flush=True)
+        rows.append({"cfg": name, "sec": round(dt, 1),
+                     "pairs_per_sec": round(pairs / dt, 2),
+                     "pos_diff_vs_truth": diff})
+        if ref is None:
+            ref = (ph.copy(), nh.copy())
+            result0, _ = compute_tpir_from_hist(ph, nh, target_fars=target_fars)
+        else:
+            same_p = np.array_equal(ph, ref[0])
+            same_n = np.array_equal(nh, ref[1])
+            rows[-1]["hist_equal_to_first"] = {"pos": bool(same_p), "neg": bool(same_n)}
+        del ph, nh
+
+    print("  [v6 矩阵汇总]")
+    for r in sorted(rows, key=lambda x: x["sec"]):
+        print(f"    {r['sec']:8.1f}s  {r['cfg']}")
+    return result0, rows
 
 
 def compute_metric_verification(embeddings, eval_data_path):
@@ -657,17 +765,30 @@ if __name__ == '__main__':
 
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_gpu', type=int, default=7)
+    parser.add_argument('--num_gpu', type=int, default=8)
     parser.add_argument('--eval_config_name', type=str, default='test_20260605')
     parser.add_argument('--ckpt_path', type=str, required=True)
     parser.add_argument('--name', type=str, default='eval3')
     parser.add_argument('--precision', type=str, default='fp16',
                         choices=['fp16', 'fp32'],
                         help="TRT engine 精度: fp16(默认, 快) / fp32(更稳, 更接近 PyTorch)")
+    parser.add_argument('--v6_matrix', action='store_true',
+                        help="custom_verification4 上循环跑 v6 配置矩阵 "
+                             "{fp16,tf32}×{torch,triton} (+shard/+skip_clamp)")
+    parser.add_argument('--v6_shard', action='store_true',
+                        help="v6_matrix 中额外跑 shard 模式(fp16/torch)")
+    parser.add_argument('--v6_skip_clamp', action='store_true',
+                        help="v6_matrix 中额外跑 skip_clamp(fp16/torch)")
+    parser.add_argument('--batch_size', type=int, default=256,
+                        help="TRT 提特征 batch (dataloader batch; flip 后 2x 过 engine)")
+    parser.add_argument('--num_workers', type=int, default=5,
+                        help="每个 GPU 进程的 DataLoader workers")
     args = parser.parse_args()
 
     path = args.ckpt_path
     num_gpu = args.num_gpu
+    os.environ['TRT_BATCH_SIZE'] = str(args.batch_size)
+    os.environ['TRT_NUM_WORKERS'] = str(args.num_workers)
     epoch = get_epoch_num(path)
     print(f"评估 checkpoint: {os.path.basename(path)} (epoch={epoch})")
 
@@ -683,7 +804,7 @@ if __name__ == '__main__':
     trt_cache = '/tmp/trt_eval3_cache'
     print(f"构建 TRT engine (precision={args.precision})...")
     t0 = time.time()
-    engine_path = build_trt_engine(model, batch_size=BATCH_SIZE, cache_dir=trt_cache,
+    engine_path = build_trt_engine(model, batch_size=args.batch_size, cache_dir=trt_cache,
                                    precision=args.precision)
     if engine_path is None:
         print("TRT 构建失败")
@@ -701,6 +822,10 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
 
     all_result = {}
+    v6_matrix_rows = []
+    # 同轮特征复用: 同一 HF 数据集 (如 ijbbc/ijbc 共用 IJBC_gt_aligned) 只提一次;
+    # cv4 千万级特征缓存内存不可行, 仅 HF worker 路径启用
+    feat_cache = {}
 
     for eval_name, info in eval_config.per_epoch_evaluations.items():
         eval_data_path = os.path.join(eval_config.data_root, info.path)
@@ -721,45 +846,63 @@ if __name__ == '__main__':
         else:
             worker_fn = worker_extract
 
-        # 多进程提取特征
-        t0 = time.time()
-        processes = []
-        for rank in range(num_gpu):
-            p = mp.Process(target=worker_fn,
-                           args=(rank, num_gpu, engine_path, eval_data_path, shm_path))
-            p.start()
-            processes.append(p)
+        feat_reuse_key = (id(worker_fn), eval_data_path) \
+            if worker_fn in (worker_extract_hf, worker_extract_hf_tinyface) else None
+        cached_feats = feat_cache.get(feat_reuse_key) \
+            if feat_reuse_key is not None else None
 
-        for p in processes:
-            p.join()
+        if cached_feats is not None:
+            print(f"  [feat-reuse] 同数据集本轮已提取, 跳过特征提取")
+            extract_time = 0.0
+        else:
+            # 多进程提取特征
+            t0 = time.time()
+            processes = []
+            for rank in range(num_gpu):
+                p = mp.Process(target=worker_fn,
+                               args=(rank, num_gpu, engine_path, eval_data_path, shm_path))
+                p.start()
+                processes.append(p)
 
-        # 检查子进程退出码
-        failed = [i for i, p in enumerate(processes) if p.exitcode != 0]
-        if failed:
-            print(f"  GPU {failed} 提取失败!")
-            continue
+            for p in processes:
+                p.join()
 
-        extract_time = time.time() - t0
+            # 检查子进程退出码
+            failed = [i for i, p in enumerate(processes) if p.exitcode != 0]
+            if failed:
+                print(f"  GPU {failed} 提取失败!")
+                continue
+
+            extract_time = time.time() - t0
         print(f"  特征提取: {extract_time:.1f}s ({num_gpu} GPU)")
+
+        def _load_feats(gather_fn):
+            """gather 去重 + 同轮缓存写入"""
+            if cached_feats is not None:
+                return cached_feats
+            feats = gather_fn(shm_path, num_gpu)
+            if feat_reuse_key is not None:
+                feat_cache[feat_reuse_key] = feats
+            return feats
 
         # 聚合 & 计算指标
         t0 = time.time()
         metadata_path = os.path.join(eval_data_path, 'metadata.pt')
 
         if eval_type == 'verification':
-            features_normal, features_flip, index = gather_and_deduplicate_hf(shm_path, num_gpu)
+            features_normal, features_flip, index = _load_feats(gather_and_deduplicate_hf)
             print(f"  样本数: {len(index)}")
             embeddings = (features_normal + features_flip).numpy()
             result = compute_metric_verification(embeddings, eval_data_path)
 
         elif eval_type == 'ijbbc':
-            features_normal, features_flip, index = gather_and_deduplicate_hf(shm_path, num_gpu)
+            features_normal, features_flip, index = _load_feats(gather_and_deduplicate_hf)
             print(f"  样本数: {len(index)}")
             embeddings = (features_normal + features_flip).numpy()
             result = compute_metric_ijbbc(embeddings, metadata_path)
 
         elif eval_type == 'ijbc_custom':
-            features_normal, features_flip, index = gather_and_deduplicate_hf(shm_path, num_gpu)
+            features_normal, features_flip, index = _load_feats(gather_and_deduplicate_hf)
             print(f"  样本数: {len(index)}")
             embeddings = (features_normal + features_flip).numpy()
             embeddings = sklearn.preprocessing.normalize(embeddings)
@@ -767,20 +910,28 @@ if __name__ == '__main__':
             result = compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus=num_gpu)
 
         elif eval_type == 'tinyface':
-            features_normal, features_flip, index, image_paths = gather_and_deduplicate_tinyface(shm_path, num_gpu)
+            features_normal, features_flip, index, image_paths = _load_feats(gather_and_deduplicate_tinyface)
             print(f"  样本数: {len(index)}")
             embeddings = (features_normal + features_flip).numpy()
             result = compute_metric_tinyface(embeddings, image_paths, metadata_path)
 
         else:
             # custom_verification4, custom_verification, etc.
-            features_normal, features_flip, labels = gather_and_deduplicate(shm_path, num_gpu)
+            features_normal, features_flip, labels = _load_feats(gather_and_deduplicate)
             print(f"  样本数: {len(labels)}")
             embeddings = (features_normal + features_flip).numpy()
             embeddings = sklearn.preprocessing.normalize(embeddings)
             query_ids = labels.numpy()
             if eval_type in ('custom_verification4',):
-                result = compute_metric_type4(embeddings, query_ids, num_gpus=num_gpu)
+                if args.v6_matrix:
+                    result0, v6_rows = compute_metric_type4_v6_matrix(
+                        embeddings, query_ids, num_gpus=num_gpu,
+                        use_shard=args.v6_shard, use_skip_clamp=args.v6_skip_clamp)
+                    result = result0
+                    v6_matrix_rows.extend(
+                        [{**r, "evaluator": eval_name} for r in v6_rows])
+                else:
+                    result = compute_metric_type4(embeddings, query_ids, num_gpus=num_gpu)
             else:
                 result = compute_metric_default(embeddings, query_ids)
 
@@ -792,6 +943,11 @@ if __name__ == '__main__':
 
     # 保存结果 (与 torch 版本一致，经 summary() 转换 key 格式)
     all_result['epoch'] = epoch
+    if v6_matrix_rows:
+        import json as _json
+        with open(os.path.join(output_dir, 'v6_matrix_timing.json'), 'w') as f:
+            _json.dump(v6_matrix_rows, f, ensure_ascii=False, indent=2)
+        print(f"v6 矩阵计时已保存: {output_dir}/v6_matrix_timing.json")
     save_result = pd.DataFrame(pd.Series(all_result), columns=['val'])
     save_result.to_csv(os.path.join(output_dir, f'epoch_{epoch}_raw.csv'))
 

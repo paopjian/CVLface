@@ -5,41 +5,33 @@ from sklearn.metrics import roc_curve
 
 
 def image2template_feature(img_feats=None, templates=None, medias=None, dummy=False):
-    # ==========================================================
-    # 1. face image feature l2 normalization. img_feats:[number_image x feats_dim]
-    # 2. compute media feature.
-    # 3. compute template feature.
-    # ==========================================================
-    unique_templates = np.unique(templates)
-    template_feats = np.zeros((len(unique_templates), img_feats.shape[1]))
+    """向量化版: (template, media) 组内均值 → template 内求和 → L2 归一化。
 
+    等价于原逐 template/media 的 Python 循环, 但全部用 numpy 段聚合 (np.add.reduceat)。
+    """
+    img_feats = sklearn.preprocessing.normalize(img_feats) if False else img_feats
     if dummy:
-        template_feats = np.random.randn(len(unique_templates), img_feats.shape[1])
-        template_norm_feats = sklearn.preprocessing.normalize(template_feats)
-        return template_norm_feats, unique_templates
+        template_feats = np.random.randn(len(np.unique(templates)), img_feats.shape[1])
+        return sklearn.preprocessing.normalize(template_feats), np.unique(templates)
 
-    for count_template, uqt in tqdm(enumerate(unique_templates), total=len(unique_templates), desc='image2template_feature'):
+    order = np.lexsort((medias, templates))
+    t_s, m_s = np.asarray(templates)[order], np.asarray(medias)[order]
+    feats_s = img_feats[order]
 
-        (ind_t,) = np.where(templates == uqt)
-        face_norm_feats = img_feats[ind_t]
-        face_medias = medias[ind_t]
-        unique_medias, unique_media_counts = np.unique(face_medias, return_counts=True)
-        media_norm_feats = []
-        for u, ct in zip(unique_medias, unique_media_counts):
-            (ind_m,) = np.where(face_medias == u)
-            if ct == 1:
-                media_norm_feats += [face_norm_feats[ind_m]]
-            else:  # image features from the same video will be aggregated into one feature
-                media_norm_feats += [
-                    np.mean(face_norm_feats[ind_m], axis=0, keepdims=True)
-                ]
-        media_norm_feats = np.array(media_norm_feats)
-        # media_norm_feats = media_norm_feats / np.sqrt(np.sum(media_norm_feats ** 2, -1, keepdims=True))
-        template_feats[count_template] = np.sum(media_norm_feats, axis=0)
-    # template_norm_feats = template_feats / np.sqrt(np.sum(template_feats ** 2, -1, keepdims=True))
-    template_norm_feats = sklearn.preprocessing.normalize(template_feats)
-    # print(template_norm_feats.shape)
-    return template_norm_feats, unique_templates
+    # (template, media) 组边界
+    new_group = np.r_[True, (t_s[1:] != t_s[:-1]) | (m_s[1:] != m_s[:-1])]
+    starts = np.flatnonzero(new_group)
+    counts = np.diff(np.r_[starts, len(feats_s)]).astype(np.float32)[:, None]
+
+    # media 组内均值 (ct==1 时即原特征, 与原实现等价)
+    media_feats = np.add.reduceat(feats_s, starts, axis=0) / counts
+    group_templates = t_s[starts]
+
+    # template 段聚合 (media 组已按 template 排序, template 连续)
+    t_change = np.r_[True, group_templates[1:] != group_templates[:-1]]
+    unique_templates = group_templates[np.flatnonzero(t_change)]
+    template_feats = np.add.reduceat(media_feats, np.flatnonzero(t_change), axis=0)
+    return sklearn.preprocessing.normalize(template_feats), unique_templates
 
 
 def verification(template_norm_feats=None, unique_templates=None, p1=None, p2=None):
@@ -53,7 +45,7 @@ def verification(template_norm_feats=None, unique_templates=None, p1=None, p2=No
     score = np.zeros((len(p1),))  # save cosine distance between pairs
 
     total_pairs = np.array(range(len(p1)))
-    batchsize = 100000  # small batchsize instead of all pairs in one batch due to the memory limiation
+    batchsize = 500000  # 大批减少 Python 循环次数 (50 万对 fp32 中间约 1GB, 可承受)
     sublists = [ total_pairs[i:i + batchsize] for i in range(0, len(p1), batchsize) ]
     for c, s in tqdm(enumerate(sublists), total=len(sublists), desc='verification'):
         feat1 = template_norm_feats[template2id[p1[s]]]
@@ -71,6 +63,17 @@ def evaluate(embeddings, faceness_scores, templates, medias, label, p1, p2, dumm
                          {'use_norm_score': False, 'use_detector_score': True}, ]
 
     scores = {}
+    # media 分组结构只与 (templates, medias) 有关, 3 种配置共享一次计算
+    order = np.lexsort((np.asarray(medias), np.asarray(templates)))
+    t_s, m_s = np.asarray(templates)[order], np.asarray(medias)[order]
+    new_group = np.r_[True, (t_s[1:] != t_s[:-1]) | (m_s[1:] != m_s[:-1])]
+    starts = np.flatnonzero(new_group)
+    counts = np.diff(np.r_[starts, len(order)]).astype(np.float32)[:, None]
+    group_templates = t_s[starts]
+    t_change = np.r_[True, group_templates[1:] != group_templates[:-1]]
+    unique_templates = group_templates[np.flatnonzero(t_change)]
+    t_starts = np.flatnonzero(t_change)
+
     for config in infernece_configs:
         use_norm_score = config['use_norm_score']
         use_detector_score = config['use_detector_score']
@@ -82,7 +85,10 @@ def evaluate(embeddings, faceness_scores, templates, medias, label, p1, p2, dumm
         if use_detector_score:
             img_input_feats = img_input_feats * faceness_scores[:, np.newaxis]
 
-        template_norm_feats, unique_templates = image2template_feature(img_input_feats, templates, medias, dummy=dummy)
+        feats_s = img_input_feats[order]
+        media_feats = np.add.reduceat(feats_s, starts, axis=0) / counts
+        template_feats = np.add.reduceat(media_feats, t_starts, axis=0)
+        template_norm_feats = sklearn.preprocessing.normalize(template_feats)
         score = verification(template_norm_feats, unique_templates, p1, p2)
         method = f"Norm:{use_norm_score}_Det:{use_detector_score}"
         scores[method] = score

@@ -217,40 +217,40 @@ class CustomIJBCEvaluator(BaseEvaluator):
         # 使用 index_docid_list 作为query_ids(template级别的分组)
         query_ids = np.array([self.index_docid_list[idx] for idx in real_indices])
         
-        from .cluster_utils import get_sim_matrix_batch_balanced_silent
-        
+        from .cluster_utils import get_sim_matrix_large_scale_v6
+        from .custom_verification_evaluator import compute_tpir_from_hist
+
         # 1. 全量计算
         start = time.time()
         target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 5e-7, 1e-6, 1e-5, 1e-4, 1e-3]
-        
+
         N = len(query_ids)
         total_pairs = N * (N - 1) // 2
         unique_ids, counts = np.unique(query_ids, return_counts=True)
         total_pos_pairs = sum(c * (c - 1) // 2 for c in counts)
         total_neg_pairs = total_pairs - total_pos_pairs
-        
-        max_far = max(target_fars)
-        topk = max(int(total_neg_pairs * max_far), 1000)
-        
+
         print(f"总对数: {total_pairs}, 正样本对数: {total_pos_pairs}, 负样本对数: {total_neg_pairs}")
-        print(f"维护 top-{topk} 负样本分数")
-        
-        pos_scores, neg_scores, _ = get_sim_matrix_batch_balanced_silent(
+
+        # v6 直方图引擎 (tf32 + skip_clamp, 200k bins): 相比旧堆引擎 ~11x;
+        # far>=1e-8 与堆版一致, 1e-10/1e-9 端点受直方图分辨率限制有 ~0.25 偏差
+        pos_hist, neg_hist = get_sim_matrix_large_scale_v6(
             query_feats_list=embeddings,
             query_ids=query_ids,
             num_gpus=7,
-            block_size=2048*5,
-            topk=topk,
-            threshold=None,
+            block_size=2048*16,
             show_progress=True,
-            return_stats_only=False,
-            return_pairs_only=False
+            hist_bins=200_000,
+            hist_range=(-1.0, 1.0),
+            precision='tf32',
+            skip_clamp=True,
         )
-        
+
         print(f"计算矩阵耗时: {time.time() - start:.2f} 秒")
-        print(f"正样本对数量: {len(pos_scores)}, 维护的负样本对数量: {len(neg_scores)}")
-        
-        result_1, thresholds = compute_tpir_from_heap(neg_scores, pos_scores, total_neg_pairs, target_fars)
+
+        result_1, thresholds = compute_tpir_from_hist(
+            pos_hist, neg_hist, hist_bins=200_000, hist_range=(-1.0, 1.0),
+            target_fars=target_fars)
         print(f"全量结果: {result_1}")
         
         # 2. 001 检测图片对比
@@ -300,23 +300,23 @@ class CustomIJBCEvaluator(BaseEvaluator):
         total_pos_pairs = sum(c * (c - 1) // 2 for c in counts)
         total_neg_pairs = total_pairs - total_pos_pairs
         
-        topk = max(int(total_neg_pairs * max_far), 1000)
-        
         print(f"001子集统计 - 总对数: {total_pairs}, 正样本: {total_pos_pairs}, 负样本: {total_neg_pairs}")
-        
-        pos_scores, neg_scores, _ = get_sim_matrix_batch_balanced_silent(
+
+        pos_hist_001, neg_hist_001 = get_sim_matrix_large_scale_v6(
             query_feats_list=image_feat_001,
             query_ids=query_ids_001,
             num_gpus=7,
-            block_size=2048*5,
-            topk=topk,
-            threshold=None,
+            block_size=2048*16,
             show_progress=True,
-            return_stats_only=False,
-            return_pairs_only=False
+            hist_bins=200_000,
+            hist_range=(-1.0, 1.0),
+            precision='tf32',
+            skip_clamp=True,
         )
-        
-        result_2, thresholds = compute_tpir_from_heap(neg_scores, pos_scores, total_neg_pairs, target_fars)
+
+        result_2, thresholds = compute_tpir_from_hist(
+            pos_hist_001, neg_hist_001, hist_bins=200_000, hist_range=(-1.0, 1.0),
+            target_fars=target_fars)
         print(f"001子集结果: {result_2}")
         
         # 合并结果

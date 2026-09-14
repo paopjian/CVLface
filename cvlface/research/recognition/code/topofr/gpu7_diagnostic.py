@@ -91,7 +91,7 @@ def test_single_gpu(gpu_id, timeout_sec=60):
         results.append(("设备信息", True, ""))
     except Exception as e:
         print_result("设备信息", False, str(e))
-        return [(name, False, str(e))]
+        return [("设备信息", False, str(e))]
 
     tests = [
         ("张量创建 1024x1024",
