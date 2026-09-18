@@ -443,18 +443,15 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
     # v6 直方图引擎 (tf32 + skip_clamp, 200k bins): 相比旧堆引擎 ~41x,
     # far>=1e-8 与堆版一致 (<0.02); 1e-10/1e-9 端点受直方图分辨率限制有
     # ~0.25 偏差 (绝对值本就 <0.6), PoC 对拍见 opt_eval/tensorrt/ijbc_v6hist_poc.py
-    pos_hist, neg_hist = get_sim_matrix_large_scale_v6(
+    pos_hist, neg_hist = get_pos_neg_hist_cuda_v7(
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
-        block_size=2048 * 16,
-        show_progress=True,
-        hist_bins=200_000,
+        block_size=16384,
+        hist_bins=2000,
         hist_range=(-1.0, 1.0),
-        precision='tf32',
-        skip_clamp=True,
     )
-    result_all, _ = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=200_000,
+    result_all, _ = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=2000,
                                            hist_range=(-1.0, 1.0),
                                            target_fars=target_fars)
     print(f"  全量结果: {result_all}")
@@ -494,19 +491,16 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
             total_pos_001 = sum(c * (c - 1) // 2 for c in counts_001)
             total_neg_001 = total_pairs_001 - total_pos_001
 
-            pos_hist_001, neg_hist_001 = get_sim_matrix_large_scale_v6(
+            pos_hist_001, neg_hist_001 = get_pos_neg_hist_cuda_v7(
                 query_feats_list=image_feat_001,
                 query_ids=query_ids_001,
                 num_gpus=num_gpus,
-                block_size=2048 * 16,
-                show_progress=True,
-                hist_bins=200_000,
+                block_size=16384,
+                hist_bins=2000,
                 hist_range=(-1.0, 1.0),
-                precision='tf32',
-                skip_clamp=True,
             )
             result_001, _ = compute_tpir_from_hist(
-                pos_hist_001, neg_hist_001, hist_bins=200_000,
+                pos_hist_001, neg_hist_001, hist_bins=2000,
                 hist_range=(-1.0, 1.0), target_fars=target_fars)
             print(f"  001子集结果: {result_001}")
         else:
