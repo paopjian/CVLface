@@ -550,3 +550,42 @@ fp16 engine 上实测（batch 256，输入常驻 GPU）：default stream（生�
 至此提特征段 21 → 12.8min（原始 spawn+PIL 链 → cv2+fork+nw10），叠加 IJBC 复用与 IJBC 指标优化，整轮从 29.5min 降至 ~24min。
 
 产物：`opt_eval/tensorrt/int8_ptq_test.py`（全链路可复现）、`stream_pipeline_bench.py`、`dataloader_bench.py`；结果 `int8_ptq_results.parquet`、`stream_pipeline_results.parquet`、`dataloader_workers_results.parquet`。中间产物在 `/tmp/int8_ptq_work/`（含两个 engine，可删）。
+## 19. v7: CUDA fp16 双桶直读核接入 cv4 TPIR（9/18，已合入）
+
+背景：cv_datapipe6《GPU提速调研总结.md》（7.单匹配与无匹配合并/）的 55 号核闭合了
+"核内 pos/neg 双直方图"缺口——fp16 单遍读 + full/pos 双 smem 桶 + 核内查码表判同 ID，
+neg=full−pos 精确导出，v5 47M 图全量 33min 三层互证全过。评估链路 cv4 的 TPIR 恰好
+是 hist@2000（0.001 精度，落在共享内存私有桶的 ~24k bins 适用区间），条件全部成熟。
+
+### 19.1 实现
+
+- `evaluations/cuda_histpn_f16.cu`：55 号核原样拷入（65 行）
+- `evaluations/cluster_utils.py::get_pos_neg_hist_cuda_v7()`：v6 同构编排
+  （列分片常驻 + 行块 cache + 队列多线程），fp16 GEMM + 双桶核；
+  ids→组号用 unique+inverse（不要求同 ID 连续排列）；内置守恒断言；
+  load_inline 懒编译（首次 ~40s，之后走 torch extensions 缓存）
+- `compute_metric_type4`（cv4 四集）切 v7；IJBC 保持 v6（200k bins 超 smem 封顶，
+  且仅 14.7s 无需优化）。顺带修复：TPIR 调用此前未显式传 hist_bins（TPIR 碰巧
+  正确但 thresholds 字典错位）
+
+### 19.2 验证
+
+小数据（3000² 随机）：posΣ = 理论正对数精确相等。真实数据对拍（v6 tf32 vs v7 fp16）：
+
+| 集合 | v6 | v7 | 提速 | TPIR 最大偏差 |
+|---|---|---|---|---|
+| enhance（20 万） | 2.3s | 0.9s | 2.65× | 0.25 @1e-10（小集端点噪声，历史 run-to-run 同量级） |
+| test_1201（267 万） | 14.6s | 8.9s | 1.64× | **<0.06（全部端点）** |
+| glint（682 万，全量轮） | ~70s | 44.8s | ~1.6× | 见下 |
+| 3t（428 万，全量轮） | — | 20.4s | — | 见下 |
+
+全量 test 轮（v7_test_0914 vs fork 轮）：cv4 指标段 225.7 → 187.3s；cv4 20 项 TPIR
+最大差 0.27（enhance 小集端点）；75 项平均差 0.043；IJBC 段未改动，其 0.31 偏差为
+engine rebuild 固有波动（与 17 章同量级）。整轮 ~24min（cv4 指标段已非大头，
+特征融合/normalize 与 TPIR 的 CPU 部分占剩余的一半）。
+
+### 19.3 结论
+
+sim 本体 2.65×（小集）/1.6×（大集）达成；整轮收益 ~0.5min（cv4 指标段在 fork 优化
+后已只占 ~3min）。v7 与 v6 并存：cv4 走 v7（2000 bins），IJBC 走 v6（200k bins），
+两者由 bins 需求天然划分。

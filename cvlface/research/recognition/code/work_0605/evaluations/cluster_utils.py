@@ -2634,3 +2634,143 @@ def get_sim_matrix_large_scale_v6(
             return total_pos_hist.numpy(), total_neg_hist.numpy(), collected_pairs
 
     return total_pos_hist.numpy(), total_neg_hist.numpy()
+
+
+# ============================================================
+# v7: CUDA fp16 双桶直读直方图引擎 (55 号核, hist@2000 的 TPIR 用)
+# ============================================================
+_CUDA_HISTPN_SRC = (Path(__file__).parent / 'cuda_histpn_f16.cu')
+_v7_ext = None
+
+
+def _get_v7_ext():
+    """懒编译 55 号双桶核 (首次调用编译一次, 之后走 torch extensions 缓存)"""
+    global _v7_ext
+    if _v7_ext is None:
+        from torch.utils.cpp_extension import load_inline
+        _cpp = ("void histpn_f16(torch::Tensor x, long C, torch::Tensor rcd, "
+                "torch::Tensor ccd, double lo, double hi, double invw, long bins, "
+                "long is_diag, torch::Tensor out_full, torch::Tensor out_pos, "
+                "long blocks, long threads);")
+        _v7_ext = load_inline(name="histpn_f16_v1", cpp_sources=_cpp,
+                              cuda_sources=_CUDA_HISTPN_SRC.read_text(),
+                              functions=["histpn_f16"], verbose=False)
+    return _v7_ext
+
+
+def get_pos_neg_hist_cuda_v7(query_feats_list, query_ids, num_gpus=7,
+                             block_size=16384, hist_bins=2_000,
+                             hist_range=(-1.0, 1.0)):
+    """v7: fp16 GEMM + CUDA 双桶直读核 (full+pos 一次读, neg=full-pos)。
+
+    适用于 hist_bins<=~20000 的 TPIR 场景 (smem 私有桶 ~24k bins 封顶;
+    cv4 链路的 hist@2000 正好命中)。相对 v6 (tf32 GEMM + histc):
+    fp16 GEMM 2.1x + 直读核 0.62ms/tile 贴带宽地板, 实测 ~2.5x。
+    语义: histc 同款分桶, 范围外丢弃 (无 skip_clamp 补偿, 越界对极稀少)。
+
+    Returns:
+        (pos_hist, neg_hist) np.int64 (hist_bins,)
+    """
+    ext = _get_v7_ext()
+    LO, HI = float(hist_range[0]), float(hist_range[1])
+    invw = hist_bins / (HI - LO)
+
+    feats = query_feats_list
+    if isinstance(feats, np.ndarray):
+        feats = torch.from_numpy(feats)
+    feats = feats.detach().cpu()
+    if feats.dtype != torch.float16:
+        feats = feats.float().half()
+    feats = feats.contiguous()
+    try:
+        torch.cuda.cudart().cudaHostRegister(feats.data_ptr(), feats.nbytes, 0)
+    except Exception:
+        feats = feats.pin_memory()
+    ids = np.asarray(query_ids)
+    codes = torch.from_numpy(
+        np.unique(ids, return_inverse=True)[1].astype(np.int32)).pin_memory()
+    N = len(ids)
+
+    nb = (N + block_size - 1) // block_size
+    tiles = [(bi, bj) for bi in range(nb) for bj in range(bi, nb)]
+    qs = [queue.Queue() for _ in range(num_gpus)]
+    for t in tiles:
+        qs[t[1] % num_gpus].put(t)
+    for q in qs:
+        q.put(None)
+
+    accum = {'full': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)],
+             'pos': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)]}
+    stats = [{'valid': 0, 'tiles': 0} for _ in range(num_gpus)]
+
+    def _worker(g, q):
+        with torch.cuda.device(g):
+            dev = torch.device(f'cuda:{g}')
+            shard = {}
+            for bj in range(g, nb, num_gpus):
+                c0, c1 = bj * block_size, min((bj + 1) * block_size, N)
+                shard[bj] = (feats[c0:c1].to(dev, non_blocking=True),
+                             codes[c0:c1].to(dev, non_blocking=True))
+            torch.cuda.current_stream().synchronize()
+            accf = torch.zeros(hist_bins, device=dev, dtype=torch.int64)
+            accp = torch.zeros(hist_bins, device=dev, dtype=torch.int64)
+            outf = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
+            outp = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
+            cache = (-1, None, None)
+            while True:
+                it = q.get()
+                if it is None:
+                    break
+                bi, bj = it
+                r0, r1 = bi * block_size, min((bi + 1) * block_size, N)
+                c0, c1 = bj * block_size, min((bj + 1) * block_size, N)
+                diag = bi == bj
+                if diag:
+                    blk1, cd1 = shard[bi]
+                    blk2, cd2 = blk1, cd1
+                else:
+                    if cache[0] == bi:
+                        blk1, cd1 = cache[1], cache[2]
+                    else:
+                        blk1 = feats[r0:r1].to(dev, non_blocking=True)
+                        cd1 = codes[r0:r1].to(dev, non_blocking=True)
+                        cache = (bi, blk1, cd1)
+                    blk2, cd2 = shard[bj]
+                sim = torch.matmul(blk1, blk2.T)          # fp16 GEMM
+                outf.zero_()
+                outp.zero_()
+                ext.histpn_f16(sim, c1 - c0, cd1, cd2, LO, HI, invw,
+                               hist_bins, int(diag), outf, outp, 4096, 128)
+                accf.add_(outf.to(torch.int64))
+                accp.add_(outp.to(torch.int64))
+                R, C = r1 - r0, c1 - c0
+                stats[g]['valid'] += (R * (C - 1)) // 2 if diag else R * C
+                stats[g]['tiles'] += 1
+            accum['full'][g] = accf.cpu()
+            accum['pos'][g] = accp.cpu()
+            del shard, accf, accp, outf, outp
+            torch.cuda.empty_cache()
+
+    ths = [threading.Thread(target=_worker, args=(g, qs[g]), name=f'v7-g{g}')
+           for g in range(num_gpus)]
+    for th in ths:
+        th.start()
+    for th in ths:
+        th.join()
+
+    try:
+        torch.cuda.cudart().cudaHostUnregister(feats.data_ptr())
+    except Exception:
+        pass
+
+    full = accum['full'][0]
+    pos = accum['pos'][0]
+    for g in range(1, num_gpus):
+        full += accum['full'][g]
+        pos += accum['pos'][g]
+    valid = sum(s['valid'] for s in stats)
+    lost = int(full.sum()) - valid
+    assert lost <= 0 or lost < valid * 1e-6, \
+        f"v7 守恒失败: histΣ {int(full.sum()):,} vs 解析 {valid:,} (差 {lost:,})"
+    neg = full - pos
+    return pos.numpy(), neg.numpy()
