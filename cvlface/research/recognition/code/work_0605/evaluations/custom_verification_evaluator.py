@@ -951,20 +951,17 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 min_threshold = min(thresholds.values())
                 print(f"正在获取高相似度图片对 (threshold >= {min_threshold})...")
 
-                _, _, all_high_sim_pairs = get_sim_matrix_fn(
+                _, _, neg_pairs_arr, _ = get_hist_v7_fn(
                     query_feats_list=embeddings,
                     query_ids=query_ids,
                     num_gpus=eval_num_gpus,
-                    block_size=2048*2,
-                    precision='tf32',
-                    show_progress=True,
-                    collect_pairs_config={
-                        'sample_type': 'neg',
-                        'threshold_mode': 'above',
-                        'threshold': min_threshold,
-                        'max_pairs': -1,
-                    }
+                    block_size=16384,
+                    hist_bins=2000,
+                    hist_range=(-1.0, 1.0),
+                    neg_threshold=min_threshold,
                 )
+                all_high_sim_pairs = [(int(i), int(j), float(s))
+                                      for i, j, s in neg_pairs_arr]
 
                 # 按阈值分组
                 thresholds_list = list(thresholds.values())

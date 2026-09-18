@@ -589,3 +589,55 @@ engine rebuild 固有波动（与 17 章同量级）。整轮 ~24min（cv4 指�
 sim 本体 2.65×（小集）/1.6×（大集）达成；整轮收益 ~0.5min（cv4 指标段在 fork 优化
 后已只占 ~3min）。v7 与 v6 并存：cv4 走 v7（2000 bins），IJBC 走 v6（200k bins），
 两者由 bins 需求天然划分。
+## 20. 评估全链路统一 v7@2000（9/18，已合入）
+
+按用户决策，全部评估调用统一 v7（fp16 GEMM + CUDA 双桶核 + hist@2000），v6 函数保留
+在 cluster_utils.py 作记录、评估路径不再调用（唯一例外：`custom_verification_evaluator.py`
+保存图片分支的样本对提取仍用 v6——v7 仅产出直方图，无样本对能力）。
+
+切换明细（6 处）：
+- ijbc_custom 全量 + 001（eval_all_trt_single.py）：v6@200k → v7@2000
+- 训练链路 ijbc（custom_ijbbc_evaluator.py）全量 + 001：同上，v6 import 删除
+- 训练链路 cv4 直方图两处（custom_verification_evaluator.py）：v6 → v7@2000
+  （该处原未显式传 hist_bins，实际 200k）
+
+对拍（IJB-C 真实提特征，v7@2000 vs v6@200k）：
+- posΣ 三方一致 = 108,251,342（真值）
+- sim：3.8s → 1.3s
+- 1e-10/1e-9 端点：v7@2000 = 0.5661 与旧堆引擎（精确 top-k）**精确一致**；
+  v6@200k 的 0.3205 才是偏低的一方（tf32 误差带效应）——降 bins 意外修正了该端点
+- far≥1e-8 最大偏差 0.106@1e-4：bin 宽 0.001 在负分密集区的定位粒度所致，
+  属 0.001 精度口径的固有误差（历史 run-to-run 波动 0.02~0.3 同量级）
+## 21. v7 统一入口三模式 + 样本对分支切换（9/18，已合入）
+
+`get_sim_matrix_large_scale_v7` 升级为调研目标的三模式统一入口：
+
+| 模式 | 触发 | 核 | 返回 |
+|---|---|---|---|
+| A hist-only | 不传阈值 | 55 号双桶核 | (pos_hist, neg_hist) |
+| B/C 样本对 | neg/pos_threshold 任一非 None | 遍 1 双桶核 (TPIR) + 遍 2 fused_he (54 号提取核) | (pos_hist, neg_hist, neg_pairs, pos_pairs) |
+
+pairs 格式 (i, j, score) 全局行号 fp32 分数; diag tile 用 torch 层严格上三角（免 triton）。
+
+`custom_verification_evaluator.py` 保存图片分支（收集 neg≥min_threshold 对做 FP 审核
+拼图）切换 v7 C 模式——**全仓库最后一个 v6 评估调用点消除**，v6 函数仅存于
+cluster_utils.py 作记录。
+
+### 21.1 过程中抓出的两个 bug
+
+1. **v6 worker 样本对调用名错**（融合时遗漏）：三处 `_collect_pairs`（v3 的 8 参版）
+   应为 `_collect_tile_pairs`（v6 的 5 参版）——v6 的 collect_pairs_config 模式自
+   融合以来一直不可用（NameError 被 worker 吞为失败），本轮首次触发即暴露并修复。
+   意味着 v6 时代从未真正跑通过样本对提取路径。
+2. **v7 diag torch 层坐标错配**：三角压缩序列 `vals = s32[tri]` 的命中索引直接
+   `//C %C` 还原行列（仅对全矩阵展平成立），导致 diag 块的对坐标/分数错配
+   （enhance 1,550,884 对中绝大多数为假对，重合率 0.92%）。受控复现（人工矩阵直调
+   核→核正确）+ 编排内自检（前 5 tile 逐对现算核对→编排内复现）二分定位后，
+   改为 2D nonzero 修复。
+
+### 21.2 修复后对拍（enhance 20 万张, neg≥0.5）
+
+- neg 对数：v6 16,047 vs v7 16,127（差 80 = fp16/tf32 GEMM 边界对）
+- 坐标重合 99.50%，**v6 的全部命中都在 v7 结果中**
+- 共同对分数差 mean 1.21e-04 / max 2.44e-04（fp16 量化粒度，0.001 精度内）
+- posΣ 双侧精确一致；2.6s → 1.3s（1.94×）
