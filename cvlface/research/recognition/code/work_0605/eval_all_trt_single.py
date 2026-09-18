@@ -41,8 +41,7 @@ from evaluations.custom_verification_evaluator import (
     IndexedDataset,
 )
 from evaluations.verifications.verification import calculate_roc2
-from evaluations.cluster_utils import (get_sim_matrix_large_scale_v6,
-                                       get_sim_matrix_large_scale_v7)
+from evaluations.cluster_utils import get_sim_matrix_large_scale_v7
 from evaluations.ijbbc.evaluate import evaluate as ijbbc_evaluate
 from evaluations.tinyface.evaluate import evaluate as tinyface_evaluate
 from evaluations.custom_ijbbc_evaluator import get_pairs_data
@@ -648,60 +647,6 @@ def compute_metric_type4(embeddings, query_ids, num_gpus):
     return result
 
 
-def compute_metric_type4_v6_matrix(embeddings, query_ids, num_gpus,
-                                   precisions=('fp16', 'tf32'),
-                                   epilogues=('torch', 'triton'),
-                                   use_shard=False, use_skip_clamp=False,
-                                   block_size=2048 * 16, hist_bins=2000):
-    """v6 配置矩阵: {precisions} × {epilogues} (+shard/+skip_clamp 优化尝试),
-    不收集样本对, 每配置独立计时, 直方图互相逐 bin 对拍。返回首个配置的 TPIR 结果。"""
-    _, counts = np.unique(query_ids, return_counts=True)
-    truth_pos = int((counts * (counts - 1) // 2).sum())
-    target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
-
-    cfgs = [(f"v6_{p}_{e}", dict(precision=p, epilogue=e))
-            for p in precisions for e in epilogues]
-    if use_shard:
-        cfgs.append(("v6_fp16_shard_torch", dict(
-            precision='fp16', epilogue='torch', memory_mode='shard')))
-    if use_skip_clamp:
-        cfgs.append(("v6_fp16_torch_noclamp", dict(
-            precision='fp16', epilogue='torch', skip_clamp=True)))
-
-    rows, ref = [], None
-    result0 = None
-    for name, kw in cfgs:
-        torch.cuda.synchronize()
-        t0 = time.time()
-        ph, nh = get_sim_matrix_large_scale_v6(
-            query_feats_list=embeddings, query_ids=query_ids,
-            num_gpus=num_gpus, block_size=block_size,
-            hist_bins=hist_bins, hist_range=(-1.0, 1.0),
-            show_progress=False, **kw)
-        dt = time.time() - t0
-        pairs = len(query_ids) * (len(query_ids) - 1) // 2
-        pos_sum = int(ph.sum())
-        diff = pos_sum - truth_pos
-        print(f"  [{name}] {dt:.1f}s  {pairs/dt:.3e} 对/s  "
-              f"pos={pos_sum:,} (真值差 {diff:+,})", flush=True)
-        rows.append({"cfg": name, "sec": round(dt, 1),
-                     "pairs_per_sec": round(pairs / dt, 2),
-                     "pos_diff_vs_truth": diff})
-        if ref is None:
-            ref = (ph.copy(), nh.copy())
-            result0, _ = compute_tpir_from_hist(ph, nh, target_fars=target_fars)
-        else:
-            same_p = np.array_equal(ph, ref[0])
-            same_n = np.array_equal(nh, ref[1])
-            rows[-1]["hist_equal_to_first"] = {"pos": bool(same_p), "neg": bool(same_n)}
-        del ph, nh
-
-    print("  [v6 矩阵汇总]")
-    for r in sorted(rows, key=lambda x: x["sec"]):
-        print(f"    {r['sec']:8.1f}s  {r['cfg']}")
-    return result0, rows
-
-
 def compute_metric_verification(embeddings, eval_data_path):
     """Verification 协议: pair-based (如 LFW, AgeDB-30, CFP-FP 等)
     数据集结构: 12000张图 → 6000对, is_same 标记每对是否同一人
@@ -768,13 +713,6 @@ if __name__ == '__main__':
     parser.add_argument('--precision', type=str, default='fp16',
                         choices=['fp16', 'fp32'],
                         help="TRT engine 精度: fp16(默认, 快) / fp32(更稳, 更接近 PyTorch)")
-    parser.add_argument('--v6_matrix', action='store_true',
-                        help="custom_verification4 上循环跑 v6 配置矩阵 "
-                             "{fp16,tf32}×{torch,triton} (+shard/+skip_clamp)")
-    parser.add_argument('--v6_shard', action='store_true',
-                        help="v6_matrix 中额外跑 shard 模式(fp16/torch)")
-    parser.add_argument('--v6_skip_clamp', action='store_true',
-                        help="v6_matrix 中额外跑 skip_clamp(fp16/torch)")
     parser.add_argument('--batch_size', type=int, default=256,
                         help="TRT 提特征 batch (dataloader batch; flip 后 2x 过 engine)")
     parser.add_argument('--num_workers', type=int, default=5,
@@ -818,7 +756,6 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
 
     all_result = {}
-    v6_matrix_rows = []
     # 同轮特征复用: 同一 HF 数据集 (如 ijbbc/ijbc 共用 IJBC_gt_aligned) 只提一次;
     # cv4 千万级特征缓存内存不可行, 仅 HF worker 路径启用
     feat_cache = {}
@@ -919,15 +856,7 @@ if __name__ == '__main__':
             embeddings = sklearn.preprocessing.normalize(embeddings)
             query_ids = labels.numpy()
             if eval_type in ('custom_verification4',):
-                if args.v6_matrix:
-                    result0, v6_rows = compute_metric_type4_v6_matrix(
-                        embeddings, query_ids, num_gpus=num_gpu,
-                        use_shard=args.v6_shard, use_skip_clamp=args.v6_skip_clamp)
-                    result = result0
-                    v6_matrix_rows.extend(
-                        [{**r, "evaluator": eval_name} for r in v6_rows])
-                else:
-                    result = compute_metric_type4(embeddings, query_ids, num_gpus=num_gpu)
+                result = compute_metric_type4(embeddings, query_ids, num_gpus=num_gpu)
             else:
                 result = compute_metric_default(embeddings, query_ids)
 
@@ -939,11 +868,6 @@ if __name__ == '__main__':
 
     # 保存结果 (与 torch 版本一致，经 summary() 转换 key 格式)
     all_result['epoch'] = epoch
-    if v6_matrix_rows:
-        import json as _json
-        with open(os.path.join(output_dir, 'v6_matrix_timing.json'), 'w') as f:
-            _json.dump(v6_matrix_rows, f, ensure_ascii=False, indent=2)
-        print(f"v6 矩阵计时已保存: {output_dir}/v6_matrix_timing.json")
     save_result = pd.DataFrame(pd.Series(all_result), columns=['val'])
     save_result.to_csv(os.path.join(output_dir, f'epoch_{epoch}_raw.csv'))
 
