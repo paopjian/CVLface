@@ -641,3 +641,15 @@ cluster_utils.py 作记录。
 - 坐标重合 99.50%，**v6 的全部命中都在 v7 结果中**
 - 共同对分数差 mean 1.21e-04 / max 2.44e-04（fp16 量化粒度，0.001 精度内）
 - posΣ 双侧精确一致；2.6s → 1.3s（1.94×）
+### 21.3 collect 模式单遍化（同日追记）
+
+第 20 节的 collect 模式为两遍实现（双桶核 TPIR + 融合核提取，GEMM 重复算一遍）。
+已合成单遍新核 `fused_he_pn`（`cuda_histpn_he_fused.cu`）：55 号双桶骨架 + 54 号
+双阈值提取合一，一次读同时产出 full/pos 直方图 + neg/pos 对明细。统一入口重写为
+单遍编排；`get_pos_neg_hist_cuda_v7` 改为 A 模式薄转发（6 处已接入调用兼容）；
+55 号 histpn 懒编译退役（`cuda_histpn_f16.cu` 源保留）。
+
+验证：C 模式 enhance **0.9s**（v6 2.5s 的 2.78×，两遍版 1.3s），neg 对 16,127 vs
+v6 16,047 坐标重合 99.50%、分数差 fp16 粒度内；A 模式 1201 1.67×、posΣ 双侧精确
+一致、TPIR 与 v6@2000 差 <0.06。注意：`fused_he_pn_v1` 扩展首次调用含 CUDA 编译
+~40-90s（一次性，走 torch extensions 缓存）。

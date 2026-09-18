@@ -2658,146 +2658,28 @@ def _get_v7_ext():
     return _v7_ext
 
 
-def get_pos_neg_hist_cuda_v7(query_feats_list, query_ids, num_gpus=7,
-                             block_size=16384, hist_bins=2_000,
-                             hist_range=(-1.0, 1.0)):
-    """v7: fp16 GEMM + CUDA 双桶直读核 (full+pos 一次读, neg=full-pos)。
-
-    适用于 hist_bins<=~20000 的 TPIR 场景 (smem 私有桶 ~24k bins 封顶;
-    cv4 链路的 hist@2000 正好命中)。相对 v6 (tf32 GEMM + histc):
-    fp16 GEMM 2.1x + 直读核 0.62ms/tile 贴带宽地板, 实测 ~2.5x。
-    语义: histc 同款分桶, 范围外丢弃 (无 skip_clamp 补偿, 越界对极稀少)。
-
-    Returns:
-        (pos_hist, neg_hist) np.int64 (hist_bins,)
-    """
-    ext = _get_v7_ext()
-    LO, HI = float(hist_range[0]), float(hist_range[1])
-    invw = hist_bins / (HI - LO)
-
-    feats = query_feats_list
-    if isinstance(feats, np.ndarray):
-        feats = torch.from_numpy(feats)
-    feats = feats.detach().cpu()
-    if feats.dtype != torch.float16:
-        feats = feats.float().half()
-    feats = feats.contiguous()
-    try:
-        torch.cuda.cudart().cudaHostRegister(feats.data_ptr(), feats.nbytes, 0)
-    except Exception:
-        feats = feats.pin_memory()
-    ids = np.asarray(query_ids)
-    codes = torch.from_numpy(
-        np.unique(ids, return_inverse=True)[1].astype(np.int32)).pin_memory()
-    N = len(ids)
-
-    nb = (N + block_size - 1) // block_size
-    tiles = [(bi, bj) for bi in range(nb) for bj in range(bi, nb)]
-    qs = [queue.Queue() for _ in range(num_gpus)]
-    for t in tiles:
-        qs[t[1] % num_gpus].put(t)
-    for q in qs:
-        q.put(None)
-
-    accum = {'full': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)],
-             'pos': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)]}
-    stats = [{'valid': 0, 'tiles': 0} for _ in range(num_gpus)]
-
-    def _worker(g, q):
-        with torch.cuda.device(g):
-            dev = torch.device(f'cuda:{g}')
-            shard = {}
-            for bj in range(g, nb, num_gpus):
-                c0, c1 = bj * block_size, min((bj + 1) * block_size, N)
-                shard[bj] = (feats[c0:c1].to(dev, non_blocking=True),
-                             codes[c0:c1].to(dev, non_blocking=True))
-            torch.cuda.current_stream().synchronize()
-            accf = torch.zeros(hist_bins, device=dev, dtype=torch.int64)
-            accp = torch.zeros(hist_bins, device=dev, dtype=torch.int64)
-            outf = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
-            outp = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
-            cache = (-1, None, None)
-            while True:
-                it = q.get()
-                if it is None:
-                    break
-                bi, bj = it
-                r0, r1 = bi * block_size, min((bi + 1) * block_size, N)
-                c0, c1 = bj * block_size, min((bj + 1) * block_size, N)
-                diag = bi == bj
-                if diag:
-                    blk1, cd1 = shard[bi]
-                    blk2, cd2 = blk1, cd1
-                else:
-                    if cache[0] == bi:
-                        blk1, cd1 = cache[1], cache[2]
-                    else:
-                        blk1 = feats[r0:r1].to(dev, non_blocking=True)
-                        cd1 = codes[r0:r1].to(dev, non_blocking=True)
-                        cache = (bi, blk1, cd1)
-                    blk2, cd2 = shard[bj]
-                sim = torch.matmul(blk1, blk2.T)          # fp16 GEMM
-                outf.zero_()
-                outp.zero_()
-                ext.histpn_f16(sim, c1 - c0, cd1, cd2, LO, HI, invw,
-                               hist_bins, int(diag), outf, outp, 4096, 128)
-                accf.add_(outf.to(torch.int64))
-                accp.add_(outp.to(torch.int64))
-                R, C = r1 - r0, c1 - c0
-                stats[g]['valid'] += (R * (C - 1)) // 2 if diag else R * C
-                stats[g]['tiles'] += 1
-            accum['full'][g] = accf.cpu()
-            accum['pos'][g] = accp.cpu()
-            del shard, accf, accp, outf, outp
-            torch.cuda.empty_cache()
-
-    ths = [threading.Thread(target=_worker, args=(g, qs[g]), name=f'v7-g{g}')
-           for g in range(num_gpus)]
-    for th in ths:
-        th.start()
-    for th in ths:
-        th.join()
-
-    try:
-        torch.cuda.cudart().cudaHostUnregister(feats.data_ptr())
-    except Exception:
-        pass
-
-    full = accum['full'][0]
-    pos = accum['pos'][0]
-    for g in range(1, num_gpus):
-        full += accum['full'][g]
-        pos += accum['pos'][g]
-    valid = sum(s['valid'] for s in stats)
-    lost = int(full.sum()) - valid
-    assert lost <= 0 or lost < valid * 1e-6, \
-        f"v7 守恒失败: histΣ {int(full.sum()):,} vs 解析 {valid:,} (差 {lost:,})"
-    neg = full - pos
-    return pos.numpy(), neg.numpy()
+_FUSED_PN_HE_SRC = (Path(__file__).parent / 'cuda_histpn_he_fused.cu')
+_v7_pn_ext = None
 
 
-# ---------------- v7 统一入口: A hist-only / B 样本对 / C hist+样本对 ----------------
-_FUSED_HE_SRC = (Path(__file__).parent / 'cuda_fused_he.cu')
-_v7_he_ext = None
-
-
-def _get_v7_he_ext():
-    """懒编译 54 号融合提取核 (off-diag: hist 记账 + 值过滤提对, 一次读)"""
-    global _v7_he_ext
-    if _v7_he_ext is None:
+def _get_v7_pn_ext():
+    """懒编译 v7 单遍融合核 (55 号双桶 + 54 号提取合一, off-diag)"""
+    global _v7_pn_ext
+    if _v7_pn_ext is None:
         from torch.utils.cpp_extension import load_inline
-        _cpp = ("void fused_he(torch::Tensor x, long C, torch::Tensor rcd, "
-                "torch::Tensor ccd, double lo, double hi, double invw, "
-                "long bins, double thr_neg, double thr_pos, long row_off, "
-                "long col_off, long max_pairs, torch::Tensor hist, "
+        _cpp = ("void fused_he_pn(torch::Tensor x, long C, torch::Tensor rcd, "
+                "torch::Tensor ccd, double lo, double hi, double invw, long bins, "
+                "double thr_neg, double thr_pos, long is_diag, "
+                "long row_off, long col_off, long max_pairs, "
+                "torch::Tensor out_full, torch::Tensor out_pos, "
                 "torch::Tensor ni, torch::Tensor nj, torch::Tensor ns, "
                 "torch::Tensor ncnt, torch::Tensor pi, torch::Tensor pj, "
                 "torch::Tensor ps, torch::Tensor pcnt, long blocks, "
                 "long threads);")
-        _v7_he_ext = load_inline(name="fused_he_v1", cpp_sources=_cpp,
-                                 cuda_sources=_FUSED_HE_SRC.read_text(),
-                                 functions=["fused_he"], verbose=False)
-    return _v7_he_ext
+        _v7_pn_ext = load_inline(name="fused_he_pn_v1", cpp_sources=_cpp,
+                                 cuda_sources=_FUSED_PN_HE_SRC.read_text(),
+                                 functions=["fused_he_pn"], verbose=False)
+    return _v7_pn_ext
 
 
 def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
@@ -2805,38 +2687,26 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
                                   hist_range=(-1.0, 1.0),
                                   neg_threshold=None, pos_threshold=None,
                                   max_pairs_per_gpu=32_000_000):
-    """v7 统一入口, 三模式 (CUDA fp16 直读):
+    """v7 统一入口, 单遍融合核三模式 (CUDA fp16 直读):
 
-    A hist-only      : neg_threshold=pos_threshold=None
-                       → (pos_hist, neg_hist)
-    B 样本对 only     : 传任一阈值且不关注 hist (hist 照出, 白搭)
-    C hist + 样本对   : 同 B, 融合单遍一次读
+    A hist-only   : neg_threshold=pos_threshold=None
+                    → (pos_hist, neg_hist)
+    B 样本对 only  : 传任一阈值 (hist 照出)
+    C hist+样本对  : 同 B, 单遍一次读全部产出
 
-    提取语义 (与 54 号核一致): neg 对 = sim >= neg_threshold (跨身份任意对);
+    提取语义 (54 号核一致): neg 对 = 跨 ID 且 sim >= neg_threshold;
     pos 对 = 同 ID 且 sim <= pos_threshold (低分正对/漏检)。
-    diag tile 用 torch 层处理 (严格上三角, 免 triton 依赖, tile 占比 ~0.07%)。
+    diag tile 用 torch 层严格上三角 (免 triton; tile 占比 ~0.07%)。
 
     Returns:
         模式 A: (pos_hist, neg_hist) np.int64
         模式 B/C: (pos_hist, neg_hist, neg_pairs, pos_pairs)
                   pairs = (i, j, score) ndarray, i/j 为输入行号 (全局), score fp32
     """
-    collect = (neg_threshold is not None) or (pos_threshold is not None)
-    if not collect:
-        # 模式 A: hist-only (55 号双桶核)
-        return get_pos_neg_hist_cuda_v7(
-            query_feats_list, query_ids, num_gpus=num_gpus,
-            block_size=block_size, hist_bins=hist_bins, hist_range=hist_range)
-
-    # 模式 B/C: 遍 1 双桶 hist (TPIR) + 遍 2 融合提取 (54 号核)。
-    # 两颗核均已独立全量验证; fused_he 只出 full 单桶, pos/neg hist 由遍 1 供给。
-    pos_hist, neg_hist = get_pos_neg_hist_cuda_v7(
-        query_feats_list, query_ids, num_gpus=num_gpus,
-        block_size=block_size, hist_bins=hist_bins, hist_range=hist_range)
-
-    ext = _get_v7_he_ext()
+    ext = _get_v7_pn_ext()
     LO, HI = float(hist_range[0]), float(hist_range[1])
     invw = hist_bins / (HI - LO)
+    collect = (neg_threshold is not None) or (pos_threshold is not None)
     thr_n = float(neg_threshold) if neg_threshold is not None else HI + 1.0
     thr_p = float(pos_threshold) if pos_threshold is not None else LO - 1.0
 
@@ -2852,8 +2722,8 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
     except Exception:
         feats = feats.pin_memory()
     ids = np.asarray(query_ids)
-    codes = torch.from_numpy(
-        np.unique(ids, return_inverse=True)[1].astype(np.int32)).pin_memory()
+    codes = np.unique(ids, return_inverse=True)[1].astype(np.int32)
+    code_t = torch.from_numpy(codes).pin_memory()
     N = len(ids)
 
     nb = (N + block_size - 1) // block_size
@@ -2864,11 +2734,12 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
     for q in qs:
         q.put(None)
 
-    accum = {'full': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)],
-             'neg': [[] for _ in range(num_gpus)],
-             'pos': [[] for _ in range(num_gpus)]}
-    stats = [{'valid': 0, 'tiles': 0} for _ in range(num_gpus)]
     CAP = max_pairs_per_gpu
+    accum = {'full': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)],
+             'pos': [torch.zeros(hist_bins, dtype=torch.int64) for _ in range(num_gpus)],
+             'neg': [[] for _ in range(num_gpus)],
+             'posp': [[] for _ in range(num_gpus)]}
+    stats = [{'valid': 0, 'pos': 0, 'tiles': 0} for _ in range(num_gpus)]
 
     def _worker(g, q):
         with torch.cuda.device(g):
@@ -2877,10 +2748,12 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
             for bj in range(g, nb, num_gpus):
                 c0, c1 = bj * block_size, min((bj + 1) * block_size, N)
                 shard[bj] = (feats[c0:c1].to(dev, non_blocking=True),
-                             codes[c0:c1].to(dev, non_blocking=True))
+                             code_t[c0:c1].to(dev, non_blocking=True))
             torch.cuda.current_stream().synchronize()
             accf = torch.zeros(hist_bins, device=dev, dtype=torch.int64)
-            hist32 = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
+            accp = torch.zeros(hist_bins, device=dev, dtype=torch.int64)
+            outf = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
+            outp = torch.zeros(hist_bins, device=dev, dtype=torch.int32)
             ni = torch.empty(CAP, device=dev, dtype=torch.int32)
             nj = torch.empty(CAP, device=dev, dtype=torch.int32)
             ns = torch.empty(CAP, device=dev, dtype=torch.float32)
@@ -2897,7 +2770,6 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
                 bi, bj = it
                 r0, r1 = bi * block_size, min((bi + 1) * block_size, N)
                 c0, c1 = bj * block_size, min((bj + 1) * block_size, N)
-                R, C = r1 - r0, c1 - c0
                 diag = bi == bj
                 if diag:
                     blk1, cd1 = shard[bi]
@@ -2907,39 +2779,22 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
                         blk1, cd1 = cache[1], cache[2]
                     else:
                         blk1 = feats[r0:r1].to(dev, non_blocking=True)
-                        cd1 = codes[r0:r1].to(dev, non_blocking=True)
+                        cd1 = code_t[r0:r1].to(dev, non_blocking=True)
                         cache = (bi, blk1, cd1)
                     blk2, cd2 = shard[bj]
-                sim = torch.matmul(blk1, blk2.T)      # fp16 GEMM
-                if diag:
-                    # torch 层: 严格上三角 (免 triton; diag tile 占比 ~0.07%)
-                    tri = torch.triu(torch.ones(R, C, device=dev, dtype=torch.bool), 1)
-                    s32 = sim.float()
-                    s32 = s32.masked_fill(~tri, float('nan'))
-                    accf.add_(torch.histc(s32, bins=hist_bins, min=LO, max=HI).long())
-                    # 注意: 三角压缩域的索引不能直接 //C %C 还原行列, 必须 2D nonzero
-                    if neg_threshold is not None:
-                        m = tri & (s32 >= neg_threshold)
-                        di, dj = m.nonzero(as_tuple=True)
-                        accum['neg'][g].append(np.stack([
-                            (di + r0).cpu().numpy(), (dj + c0).cpu().numpy(),
-                            s32[di, dj].cpu().numpy()], axis=1))
-                    if pos_threshold is not None:
-                        same = (cd1[:, None] == cd2[None, :])
-                        m = same & tri & (s32 <= pos_threshold)
-                        di, dj = m.nonzero(as_tuple=True)
-                        accum['pos'][g].append(np.stack([
-                            (di + r0).cpu().numpy(), (dj + c0).cpu().numpy(),
-                            s32[di, dj].cpu().numpy()], axis=1))
-                    del s32, tri
-                else:
-                    hist32.zero_()
-                    ncnt.zero_()
-                    pcnt.zero_()
-                    ext.fused_he(sim, C, cd1, cd2, LO, HI, invw, hist_bins,
-                                 thr_n, thr_p, r0, c0, CAP, hist32,
-                                 ni, nj, ns, ncnt, pi, pj, ps, pcnt, 4096, 128)
-                    accf.add_(hist32.to(torch.int64))
+                sim = torch.matmul(blk1, blk2.T)          # fp16 GEMM
+                outf.zero_()
+                outp.zero_()
+                ncnt.zero_()
+                pcnt.zero_()
+                R, C = r1 - r0, c1 - c0
+                ext.fused_he_pn(sim, C, cd1, cd2, LO, HI, invw, hist_bins,
+                                thr_n, thr_p, int(diag), r0, c0, CAP,
+                                outf, outp, ni, nj, ns, ncnt,
+                                pi, pj, ps, pcnt, 4096, 128)
+                accf.add_(outf.to(torch.int64))
+                accp.add_(outp.to(torch.int64))
+                if collect:
                     nsz, psz = int(ncnt.item()), int(pcnt.item())
                     assert nsz <= CAP and psz <= CAP, \
                         f"卡{g} 提取命中超缓冲: neg {nsz}/{CAP}, pos {psz}/{CAP}"
@@ -2948,17 +2803,17 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
                             ni[:nsz].cpu().numpy(), nj[:nsz].cpu().numpy(),
                             ns[:nsz].cpu().numpy()], axis=1))
                     if psz:
-                        accum['pos'][g].append(np.stack([
+                        accum['posp'][g].append(np.stack([
                             pi[:psz].cpu().numpy(), pj[:psz].cpu().numpy(),
                             ps[:psz].cpu().numpy()], axis=1))
-                R, C = r1 - r0, c1 - c0
                 stats[g]['valid'] += (R * (C - 1)) // 2 if diag else R * C
                 stats[g]['tiles'] += 1
             accum['full'][g] = accf.cpu()
-            del shard, accf, hist32, ni, nj, ns, ncnt, pi, pj, ps, pcnt
+            accum['pos'][g] = accp.cpu()
+            del shard, accf, accp, outf, outp, ni, nj, ns, ncnt, pi, pj, ps, pcnt
             torch.cuda.empty_cache()
 
-    ths = [threading.Thread(target=_worker, args=(g, qs[g]), name=f'v7c-g{g}')
+    ths = [threading.Thread(target=_worker, args=(g, qs[g]), name=f'v7-g{g}')
            for g in range(num_gpus)]
     for th in ths:
         th.start()
@@ -2971,23 +2826,25 @@ def get_sim_matrix_large_scale_v7(query_feats_list, query_ids=None, num_gpus=7,
         pass
 
     full = accum['full'][0]
+    pos_hist = accum['pos'][0]
     for g in range(1, num_gpus):
         full += accum['full'][g]
+        pos_hist += accum['pos'][g]
     valid = sum(s['valid'] for s in stats)
     lost = int(full.sum()) - valid
     assert lost <= valid * 1e-6, \
         f"v7 守恒失败: histΣ {int(full.sum()):,} vs 解析 {valid:,} (差 {lost:,})"
+    neg_hist = full - pos_hist
+
+    if not collect:
+        return pos_hist.numpy(), neg_hist.numpy()
+
     neg_parts = [a for g in range(num_gpus) for a in accum['neg'][g]]
-    pos_parts = [a for g in range(num_gpus) for a in accum['pos'][g]]
+    pos_parts = [a for g in range(num_gpus) for a in accum['posp'][g]]
     neg_pairs = (np.concatenate(neg_parts, axis=0) if neg_parts
                  else np.zeros((0, 3), dtype=np.float32))
     pos_pairs = (np.concatenate(pos_parts, axis=0) if pos_parts
                  else np.zeros((0, 3), dtype=np.float32))
-    # neg 语义对齐 v6 collect: 仅跨身份 (54 号核为纯分数过滤, 同 ID 高分对在此剔除;
-    # codes 与 feats 同序)
-    if neg_threshold is not None and len(neg_pairs):
-        ii = neg_pairs[:, 0].astype(np.int64)
-        jj = neg_pairs[:, 1].astype(np.int64)
-        same = codes[ii] == codes[jj]
-        neg_pairs = neg_pairs[~same]
-    return pos_hist, neg_hist, neg_pairs, pos_pairs
+    return pos_hist.numpy(), neg_hist.numpy(), neg_pairs, pos_pairs
+
+

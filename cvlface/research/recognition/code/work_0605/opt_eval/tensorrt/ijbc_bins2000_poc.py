@@ -18,7 +18,7 @@ import torch
 import torch.multiprocessing as mp
 
 import eval_all_trt_single as E
-from evaluations.cluster_utils import (get_pos_neg_hist_cuda_v7,
+from evaluations.cluster_utils import (get_sim_matrix_large_scale_v7,
                                        get_sim_matrix_large_scale_v6)
 from evaluations.custom_verification_evaluator import compute_tpir_from_hist
 
@@ -73,7 +73,7 @@ def main():
                                    hist_range=(-1.0, 1.0), target_fars=TARGET_FARS)
 
     t0 = time.time()
-    p7, n7 = get_pos_neg_hist_cuda_v7(
+    p7, n7 = get_sim_matrix_large_scale_v7(
         query_feats_list=embeddings, query_ids=query_ids, num_gpus=num_gpu,
         block_size=16384, hist_bins=2000, hist_range=(-1.0, 1.0))
     t_v7 = time.time() - t0

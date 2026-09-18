@@ -217,7 +217,7 @@ class CustomIJBCEvaluator(BaseEvaluator):
         # 使用 index_docid_list 作为query_ids(template级别的分组)
         query_ids = np.array([self.index_docid_list[idx] for idx in real_indices])
         
-        from .cluster_utils import get_pos_neg_hist_cuda_v7
+        from .cluster_utils import get_sim_matrix_large_scale_v7
         from .custom_verification_evaluator import compute_tpir_from_hist
 
         # 1. 全量计算
@@ -234,7 +234,7 @@ class CustomIJBCEvaluator(BaseEvaluator):
 
         # v6 直方图引擎 (tf32 + skip_clamp, 200k bins): 相比旧堆引擎 ~11x;
         # far>=1e-8 与堆版一致, 1e-10/1e-9 端点受直方图分辨率限制有 ~0.25 偏差
-        pos_hist, neg_hist = get_pos_neg_hist_cuda_v7(
+        pos_hist, neg_hist = get_sim_matrix_large_scale_v7(
             query_feats_list=embeddings,
             query_ids=query_ids,
             num_gpus=7,
@@ -299,7 +299,7 @@ class CustomIJBCEvaluator(BaseEvaluator):
         
         print(f"001子集统计 - 总对数: {total_pairs}, 正样本: {total_pos_pairs}, 负样本: {total_neg_pairs}")
 
-        pos_hist_001, neg_hist_001 = get_pos_neg_hist_cuda_v7(
+        pos_hist_001, neg_hist_001 = get_sim_matrix_large_scale_v7(
             query_feats_list=image_feat_001,
             query_ids=query_ids_001,
             num_gpus=7,

@@ -42,7 +42,7 @@ from evaluations.custom_verification_evaluator import (
 )
 from evaluations.verifications.verification import calculate_roc2
 from evaluations.cluster_utils import (get_sim_matrix_large_scale_v6,
-                                       get_pos_neg_hist_cuda_v7)
+                                       get_sim_matrix_large_scale_v7)
 from evaluations.ijbbc.evaluate import evaluate as ijbbc_evaluate
 from evaluations.tinyface.evaluate import evaluate as tinyface_evaluate
 from evaluations.custom_ijbbc_evaluator import get_pairs_data
@@ -443,7 +443,7 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
     # v6 直方图引擎 (tf32 + skip_clamp, 200k bins): 相比旧堆引擎 ~41x,
     # far>=1e-8 与堆版一致 (<0.02); 1e-10/1e-9 端点受直方图分辨率限制有
     # ~0.25 偏差 (绝对值本就 <0.6), PoC 对拍见 opt_eval/tensorrt/ijbc_v6hist_poc.py
-    pos_hist, neg_hist = get_pos_neg_hist_cuda_v7(
+    pos_hist, neg_hist = get_sim_matrix_large_scale_v7(
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
@@ -491,7 +491,7 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
             total_pos_001 = sum(c * (c - 1) // 2 for c in counts_001)
             total_neg_001 = total_pairs_001 - total_pos_001
 
-            pos_hist_001, neg_hist_001 = get_pos_neg_hist_cuda_v7(
+            pos_hist_001, neg_hist_001 = get_sim_matrix_large_scale_v7(
                 query_feats_list=image_feat_001,
                 query_ids=query_ids_001,
                 num_gpus=num_gpus,
@@ -630,7 +630,7 @@ def compute_metric_type4(embeddings, query_ids, num_gpus):
     """type=4: large scale matrix + TPIR（v7: fp16 GEMM + CUDA 双桶直读核, hist@2000）"""
     target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
     t_sim = time.time()
-    pos_hist, neg_hist = get_pos_neg_hist_cuda_v7(
+    pos_hist, neg_hist = get_sim_matrix_large_scale_v7(
         query_feats_list=embeddings,
         query_ids=query_ids,
         num_gpus=num_gpus,
@@ -638,7 +638,7 @@ def compute_metric_type4(embeddings, query_ids, num_gpus):
         hist_bins=2000,
         hist_range=(-1.0, 1.0),
     )
-    print(f"  sim_matrix (get_pos_neg_hist_cuda_v7) 耗时: {time.time()-t_sim:.1f}s")
+    print(f"  sim_matrix (get_sim_matrix_large_scale_v7) 耗时: {time.time()-t_sim:.1f}s")
     result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist,
                                                 hist_bins=2000,
                                                 hist_range=(-1.0, 1.0),

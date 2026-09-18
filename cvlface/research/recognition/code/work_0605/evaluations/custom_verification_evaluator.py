@@ -919,8 +919,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
         if self.type == '4':
             # 使用 v6 直方图方式计算（tf32 + skip_clamp 守恒补偿; EVAL_NUM_GPUS 覆盖 GPU 数, 默认 8）
             eval_num_gpus = int(os.environ.get('EVAL_NUM_GPUS', '8'))
-            from .cluster_utils import (get_sim_matrix_large_scale_v6 as get_sim_matrix_fn,
-                                        get_pos_neg_hist_cuda_v7 as get_hist_v7_fn)
+            from .cluster_utils import get_sim_matrix_large_scale_v7 as get_hist_v7_fn
             print(f"[type4] sim_matrix: v7(CUDA fp16 双桶核), num_gpus={eval_num_gpus}")
 
             query_ids = collection['labels'].numpy()
