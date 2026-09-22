@@ -33,6 +33,11 @@ def make_optimizer(cfg, model, classifier, aligner):
         num_trainable_params += sum([p.numel() for p in classifier.parameters() if p.requires_grad])
         cls_param_groups = [{"params": [p for p in classifier.parameters() if p.requires_grad],
                              'weight_decay': cfg.optims.weight_decay}]
+        # classifier_lr 未设置时为 None, 该组沿用 optimizer 级别的 cfg.optims.lr
+        classifier_lr = getattr(cfg.optims, 'classifier_lr', None)
+        if classifier_lr is not None:
+            print(f"classifier lr: {classifier_lr}")
+            cls_param_groups[0]['lr'] = float(classifier_lr)
         params = params + cls_param_groups
 
     # get aligner param groups

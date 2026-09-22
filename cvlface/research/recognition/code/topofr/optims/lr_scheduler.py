@@ -96,7 +96,8 @@ class PolyScheduler(_LRScheduler):
 
     def get_warmup_lr(self):
         alpha = float(self.last_epoch) / float(self.warmup_steps)
-        return [self.base_lr * alpha for _ in self.optimizer.param_groups]
+        # base_lrs 是每个 param group 各自的初始 lr, 兼容 classifier_lr 分组设置
+        return [base_lr * alpha for base_lr in self.base_lrs]
 
     def get_lr(self):
         if self.last_epoch == -1:
@@ -110,7 +111,7 @@ class PolyScheduler(_LRScheduler):
                 / float(self.max_steps - self.warmup_steps),
                 self.power,
             )
-            return [self.base_lr * alpha for _ in self.optimizer.param_groups]
+            return [base_lr * alpha for base_lr in self.base_lrs]
 
 
 
@@ -128,7 +129,8 @@ class StepScheduler(_LRScheduler):
 
     def get_warmup_lr(self):
         alpha = float(self.last_epoch) / float(self.warmup_steps)
-        return [self.base_lr * alpha for _ in self.optimizer.param_groups]
+        # base_lrs 是每个 param group 各自的初始 lr, 兼容 classifier_lr 分组设置
+        return [base_lr * alpha for base_lr in self.base_lrs]
 
     def get_lr(self):
         if self.last_epoch == -1:
@@ -140,7 +142,7 @@ class StepScheduler(_LRScheduler):
             for milestone in self.lr_milestones:
                 if self.last_epoch > milestone:
                     alpha = alpha * self.lr_lambda
-            return [self.base_lr * alpha for _ in self.optimizer.param_groups]
+            return [base_lr * alpha for base_lr in self.base_lrs]
 
 
 

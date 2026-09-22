@@ -439,7 +439,7 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
 
     print(f"  总对数: {total_pairs}, 正样本: {total_pos_pairs}, 负样本: {total_neg_pairs}")
 
-    # v6 直方图引擎 (tf32 + skip_clamp, 200k bins): 相比旧堆引擎 ~41x,
+    # v6 直方图引擎 (fp16 + skip_clamp, 2000 bins): 相比旧堆引擎 ~41x,
     # far>=1e-8 与堆版一致 (<0.02); 1e-10/1e-9 端点受直方图分辨率限制有
     # ~0.25 偏差 (绝对值本就 <0.6), PoC 对拍见 opt_eval/tensorrt/ijbc_v6hist_poc.py
     pos_hist, neg_hist = get_sim_matrix_large_scale_v6(
@@ -448,12 +448,12 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
         num_gpus=num_gpus,
         block_size=2048 * 16,
         show_progress=True,
-        hist_bins=200_000,
+        hist_bins=2000,
         hist_range=(-1.0, 1.0),
-        precision='tf32',
+        precision='fp16',
         skip_clamp=True,
     )
-    result_all, _ = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=200_000,
+    result_all, _ = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=2000,
                                            hist_range=(-1.0, 1.0),
                                            target_fars=target_fars)
     print(f"  全量结果: {result_all}")
@@ -499,13 +499,13 @@ def compute_metric_ijbc_custom(embeddings, real_indices, metadata_path, num_gpus
                 num_gpus=num_gpus,
                 block_size=2048 * 16,
                 show_progress=True,
-                hist_bins=200_000,
+                hist_bins=2000,
                 hist_range=(-1.0, 1.0),
-                precision='tf32',
+                precision='fp16',
                 skip_clamp=True,
             )
             result_001, _ = compute_tpir_from_hist(
-                pos_hist_001, neg_hist_001, hist_bins=200_000,
+                pos_hist_001, neg_hist_001, hist_bins=2000,
                 hist_range=(-1.0, 1.0), target_fars=target_fars)
             print(f"  001子集结果: {result_001}")
         else:
@@ -632,7 +632,7 @@ def gather_and_deduplicate(shm_path, world_size):
 
 
 def compute_metric_type4(embeddings, query_ids, num_gpus):
-    """type=4: large scale matrix + TPIR（v6 直方图, skip_clamp 守恒补偿）"""
+    """type=4: large scale matrix + TPIR（v6 直方图, fp16 + 2000 bins, skip_clamp 守恒补偿）"""
     target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
     t_sim = time.time()
     pos_hist, neg_hist = get_sim_matrix_large_scale_v6(
@@ -642,11 +642,11 @@ def compute_metric_type4(embeddings, query_ids, num_gpus):
         block_size=2048 * 16,
         show_progress=True,
         hist_bins=2000,
-        precision='tf32',
+        precision='fp16',
         skip_clamp=True,
     )
     print(f"  sim_matrix (get_sim_matrix_large_scale_v6) 耗时: {time.time()-t_sim:.1f}s")
-    result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, target_fars=target_fars)
+    result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=2000, target_fars=target_fars)
     print('result:', result)
     print('thresholds:', thresholds)
     return result

@@ -917,7 +917,7 @@ class CustomVerificationEvaluator(BaseEvaluator):
                 #     save_images(sub_results, os.path.join(save_path, f'{thread_far[th]}'))
         
         if self.type == '4':
-            # 使用 v6 直方图方式计算（tf32 + skip_clamp 守恒补偿; EVAL_NUM_GPUS 覆盖 GPU 数, 默认 8）
+            # 使用 v6 直方图方式计算（fp16 + 2000 bins + skip_clamp 守恒补偿; EVAL_NUM_GPUS 覆盖 GPU 数, 默认 8）
             eval_num_gpus = int(os.environ.get('EVAL_NUM_GPUS', '8'))
             from .cluster_utils import get_sim_matrix_large_scale_v6 as get_sim_matrix_fn
             print(f"[type4] sim_matrix: {get_sim_matrix_fn.__name__}, num_gpus={eval_num_gpus}")
@@ -935,11 +935,12 @@ class CustomVerificationEvaluator(BaseEvaluator):
                     num_gpus=eval_num_gpus,
                     block_size=2048*4,
                     show_progress=True,
-                    precision='tf32',
+                    hist_bins=2000,
+                    precision='fp16',
                     skip_clamp=True,
                 )
 
-                result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, target_fars=target_fars)
+                result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=2000, target_fars=target_fars)
                 print(f"计算矩阵+TPIR耗时: {time.time() - start:.2f} 秒")
                 print('result: ', result)
                 print('thresholds: ', thresholds)
@@ -953,7 +954,8 @@ class CustomVerificationEvaluator(BaseEvaluator):
                     query_ids=query_ids,
                     num_gpus=eval_num_gpus,
                     block_size=2048*2,
-                    precision='tf32',
+                    hist_bins=2000,
+                    precision='fp16',
                     show_progress=True,
                     collect_pairs_config={
                         'sample_type': 'neg',
@@ -1013,11 +1015,12 @@ class CustomVerificationEvaluator(BaseEvaluator):
                     num_gpus=eval_num_gpus,
                     block_size=2048*4,
                     show_progress=True,
-                    precision='tf32',
+                    hist_bins=2000,
+                    precision='fp16',
                     skip_clamp=True,
                 )
 
-                result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, target_fars=target_fars)
+                result, thresholds = compute_tpir_from_hist(pos_hist, neg_hist, hist_bins=2000, target_fars=target_fars)
                 print(f"计算矩阵+TPIR耗时: {time.time() - start:.2f} 秒")
                 print('result: ', result)
                 print('thresholds: ', thresholds)

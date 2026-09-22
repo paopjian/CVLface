@@ -2312,110 +2312,110 @@ def _gpu_worker(
             else:
                 sim = torch.matmul(block1, block2.T)     # fp32 / tf32
 
-                if not skip_clamp:          # fp16 归一化点积越界概率极低, 跳过省一趟读写
-                    sim.clamp_(LO, HI)
+            if not skip_clamp:          # fp16 归一化点积越界概率极低, 跳过省一趟读写
+                sim.clamp_(LO, HI)
 
-                # 身份等值掩码：仅本 tile 含正样本对 或 需要收集样本对 时才计算
-                if has_pos or need_collect:
-                    label_eq = (ids_full[r0:r1, None] == ids_full[None, c0:c1])
-                else:
-                    label_eq = None
+            # 身份等值掩码：仅本 tile 含正样本对 或 需要收集样本对 时才计算
+            if has_pos or need_collect:
+                label_eq = (ids_full[r0:r1, None] == ids_full[None, c0:c1])
+            else:
+                label_eq = None
 
+            if is_diag:
+                triu = torch.triu(
+                    torch.ones(r1 - r0, c1 - c0, device=device, dtype=torch.bool),
+                    diagonal=1)
+
+            # skip_clamp 守恒补偿预统计: 本 tile 应有对数/同 ID 对数
+            # (histc 丢弃的越界值最终补回边界 bin, 语义等价 "越界算 ±1")
+            n_valid = n_same = -1
+            if skip_clamp and not use_bincount:
                 if is_diag:
-                    triu = torch.triu(
-                        torch.ones(r1 - r0, c1 - c0, device=device, dtype=torch.bool),
-                        diagonal=1)
-
-                # skip_clamp 守恒补偿预统计: 本 tile 应有对数/同 ID 对数
-                # (histc 丢弃的越界值最终补回边界 bin, 语义等价 "越界算 ±1")
-                n_valid = n_same = -1
-                if skip_clamp and not use_bincount:
-                    if is_diag:
-                        n_valid = (r1 - r0) * (r1 - r0 - 1) // 2
-                        n_same = (int(label_eq.sum().item()) - (r1 - r0)) // 2 \
-                            if label_eq is not None else 0
-                    else:
-                        n_valid = (r1 - r0) * (c1 - c0)
-                        n_same = int(label_eq.sum().item()) \
-                            if label_eq is not None else 0
-
-                # 单趟直方图前半：full（对角块先把下三角填范围外）
-                if use_bincount:
-                    q = ((sim + 1.0) * scale).floor_().clamp_(0, hist_bins - 1).to(torch.int32)
-                    if is_diag:
-                        full_hist = torch.bincount(q[triu], minlength=hist_bins).to(torch.int64)
-                    else:
-                        full_hist = torch.bincount(q.reshape(-1), minlength=hist_bins).to(torch.int64)
+                    n_valid = (r1 - r0) * (r1 - r0 - 1) // 2
+                    n_same = (int(label_eq.sum().item()) - (r1 - r0)) // 2 \
+                        if label_eq is not None else 0
                 else:
-                    if is_diag:
-                        sim.masked_fill_(~triu, FILL)
-                    full_hist = torch.histc(sim, bins=hist_bins, min=LO, max=HI).to(torch.int64)
-                    if n_valid >= 0:
-                        lost = n_valid - int(full_hist.sum().item())
-                        if lost > 0:
-                            full_hist[hist_bins - 1] += lost
-                            skip_clamp_lost[0] += lost
+                    n_valid = (r1 - r0) * (c1 - c0)
+                    n_same = int(label_eq.sum().item()) \
+                        if label_eq is not None else 0
 
-                # 样本对收集：在 pos 的 in-place masked_fill 之前做，直接用 sim（省掉整份 clone）
-                if need_collect:
-                    if is_diag:
-                        valid_mask = triu
-                    else:
-                        valid_mask = torch.ones(r1 - r0, c1 - c0, device=device, dtype=torch.bool)
-
-                    if do_collect_single and not pair_collector.is_full():
-                        base = label_eq if sample_type == 'pos' else ~label_eq
-                        target = (base & valid_mask & (sim > threshold_val)) \
-                            if threshold_mode == 'above' else (base & valid_mask & (sim < threshold_val))
-                        _collect_pairs(sim, target, r0, c0, pair_collector)
-                        del target
-
-                    if do_collect_dual:
-                        if pos_cfg and pos_pair_collector and not pos_pair_collector.is_full():
-                            pt = pos_cfg.get('threshold_mode', 'below')
-                            pv = pos_cfg.get('threshold', 0.25)
-                            cond = sim > pv if pt == 'above' else sim < pv
-                            _collect_pairs(sim, label_eq & valid_mask & cond,
-                                           r0, c0, pos_pair_collector)
-                        if neg_cfg and neg_pair_collector and not neg_pair_collector.is_full():
-                            nt = neg_cfg.get('threshold_mode', 'above')
-                            nv = neg_cfg.get('threshold', 0.5)
-                            cond = sim > nv if nt == 'above' else sim < nv
-                            _collect_pairs(sim, (~label_eq) & valid_mask & cond,
-                                           r0, c0, neg_pair_collector)
-
-                    del valid_mask
-
-                # 单趟直方图后半：pos + neg = full - pos
-                if use_bincount:
-                    pos_block = None
-                    if has_pos:
-                        sel = (triu & label_eq) if is_diag else label_eq
-                        pos_block = torch.bincount(q[sel], minlength=hist_bins).to(torch.int64)
-                        del sel
-                    del q
-                else:
-                    pos_block = None
-                    if has_pos:
-                        sim.masked_fill_(~label_eq, FILL)
-                        pos_block = torch.histc(sim, bins=hist_bins, min=LO, max=HI).to(torch.int64)
-                        if n_same >= 0:
-                            lost_p = n_same - int(pos_block.sum().item())
-                            if lost_p > 0:
-                                pos_block[hist_bins - 1] += lost_p
-                                skip_clamp_lost[1] += lost_p
-
-                if pos_block is not None:
-                    pos_hist += pos_block
-                    neg_hist += full_hist - pos_block
-                    del pos_block
-                else:
-                    neg_hist += full_hist
-                del full_hist
-                if label_eq is not None:
-                    del label_eq
+            # 单趟直方图前半：full（对角块先把下三角填范围外）
+            if use_bincount:
+                q = ((sim + 1.0) * scale).floor_().clamp_(0, hist_bins - 1).to(torch.int32)
                 if is_diag:
-                    del triu
+                    full_hist = torch.bincount(q[triu], minlength=hist_bins).to(torch.int64)
+                else:
+                    full_hist = torch.bincount(q.reshape(-1), minlength=hist_bins).to(torch.int64)
+            else:
+                if is_diag:
+                    sim.masked_fill_(~triu, FILL)
+                full_hist = torch.histc(sim, bins=hist_bins, min=LO, max=HI).to(torch.int64)
+                if n_valid >= 0:
+                    lost = n_valid - int(full_hist.sum().item())
+                    if lost > 0:
+                        full_hist[hist_bins - 1] += lost
+                        skip_clamp_lost[0] += lost
+
+            # 样本对收集：在 pos 的 in-place masked_fill 之前做，直接用 sim（省掉整份 clone）
+            if need_collect:
+                if is_diag:
+                    valid_mask = triu
+                else:
+                    valid_mask = torch.ones(r1 - r0, c1 - c0, device=device, dtype=torch.bool)
+
+                if do_collect_single and not pair_collector.is_full():
+                    base = label_eq if sample_type == 'pos' else ~label_eq
+                    target = (base & valid_mask & (sim > threshold_val)) \
+                        if threshold_mode == 'above' else (base & valid_mask & (sim < threshold_val))
+                    _collect_pairs(sim, target, r0, c0, pair_collector)
+                    del target
+
+                if do_collect_dual:
+                    if pos_cfg and pos_pair_collector and not pos_pair_collector.is_full():
+                        pt = pos_cfg.get('threshold_mode', 'below')
+                        pv = pos_cfg.get('threshold', 0.25)
+                        cond = sim > pv if pt == 'above' else sim < pv
+                        _collect_pairs(sim, label_eq & valid_mask & cond,
+                                       r0, c0, pos_pair_collector)
+                    if neg_cfg and neg_pair_collector and not neg_pair_collector.is_full():
+                        nt = neg_cfg.get('threshold_mode', 'above')
+                        nv = neg_cfg.get('threshold', 0.5)
+                        cond = sim > nv if nt == 'above' else sim < nv
+                        _collect_pairs(sim, (~label_eq) & valid_mask & cond,
+                                       r0, c0, neg_pair_collector)
+
+                del valid_mask
+
+            # 单趟直方图后半：pos + neg = full - pos
+            if use_bincount:
+                pos_block = None
+                if has_pos:
+                    sel = (triu & label_eq) if is_diag else label_eq
+                    pos_block = torch.bincount(q[sel], minlength=hist_bins).to(torch.int64)
+                    del sel
+                del q
+            else:
+                pos_block = None
+                if has_pos:
+                    sim.masked_fill_(~label_eq, FILL)
+                    pos_block = torch.histc(sim, bins=hist_bins, min=LO, max=HI).to(torch.int64)
+                    if n_same >= 0:
+                        lost_p = n_same - int(pos_block.sum().item())
+                        if lost_p > 0:
+                            pos_block[hist_bins - 1] += lost_p
+                            skip_clamp_lost[1] += lost_p
+
+            if pos_block is not None:
+                pos_hist += pos_block
+                neg_hist += full_hist - pos_block
+                del pos_block
+            else:
+                neg_hist += full_hist
+            del full_hist
+            if label_eq is not None:
+                del label_eq
+            if is_diag:
+                del triu
             del sim
 
             if pbar is not None:

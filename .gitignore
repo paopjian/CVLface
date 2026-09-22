@@ -156,3 +156,5 @@ experiments
 playground
 preprocessing
 TODO.md
+# Pretrained model weights
+cvlface/pretrained_models/
