@@ -6,6 +6,7 @@ root = pyrootutils.setup_root(
     dotenv=True,
 )
 import os, sys
+import json
 
 sys.path.append(os.path.join(root))
 import numpy as np
@@ -200,6 +201,24 @@ def broadcast_should_stop(fabric, should_stop):
     fabric.broadcast(stop_tensor, src=0)
     return stop_tensor.item()
 
+def _disable_thp_for_process():
+    """进程级 THP 防护: 大 RSS 进程的 THP 缺页在内存碎片化时触发内核同步 direct
+    compaction, 吞吐从 GB/s 掉到 10~100MB/s, 表现为评估期间全 GPU 空转的"死窗口"
+    (7 卡机 2026-09-23 A/B 验证根因; 机器级修复见 /etc/tmpfiles.d/thp-defrag.conf,
+    本函数不依赖机器 sysfs 配置, 随 fork 继承)。CVLFACE_DISABLE_THP=0 可关闭。
+    """
+    if os.environ.get('CVLFACE_DISABLE_THP', '1') == '0':
+        print('CVLFACE_DISABLE_THP=0, 跳过进程级 THP disable')
+        return
+    import ctypes
+    PR_SET_THP_DISABLE = 41
+    libc = ctypes.CDLL("libc.so.6", use_errno=True)
+    if libc.prctl(PR_SET_THP_DISABLE, 0, 0, 0, 0) != 0:
+        print(f'PR_SET_THP_DISABLE 失败 (errno={ctypes.get_errno()}), 继续运行')
+    else:
+        print('PR_SET_THP_DISABLE 已生效 (本进程禁用 THP 缺页)')
+
+
 def resolve_wandb_run(resume_dir, prefix, override_id=''):
     """断点续训时重连之前的 wandb run, 避免每次重启新建 run。
 
@@ -233,6 +252,7 @@ def resolve_wandb_run(resume_dir, prefix, override_id=''):
 
 
 if __name__ == '__main__':
+    _disable_thp_for_process()
     cfg: Config = config.init(root)
     # print(f"cfg:{cfg}")
     torch.set_float32_matmul_precision(cfg.trainers.float32_matmul_precision)
@@ -566,10 +586,23 @@ if __name__ == '__main__':
                     epoch=epoch,
                 )
             elif should_evaluate:
+                # 每数据集计时: 定位评估耗时波动 (THP 死窗口曾随机落在不同数据集)
+                eval_timings = {}
                 for evaluator in evaluators:
-                    print(f"Evaluating {evaluator.name}")
+                    if fabric.local_rank == 0:
+                        print(f"Evaluating {evaluator.name}")
+                    eval_t0 = time.time()
                     result = evaluator.evaluate(eval_pipeline, epoch=epoch, step=step, n_images_seen=n_images_seen)
+                    eval_dt = time.time() - eval_t0
+                    if fabric.local_rank == 0:
+                        eval_timings[evaluator.name] = eval_dt
+                        print(f"[eval-timing] {evaluator.name}: {eval_dt:.1f}s ({eval_dt/60:.2f} min)")
                     all_result.update({evaluator.name + "/" + k: v for k, v in result.items()})
+                if fabric.local_rank == 0 and eval_timings:
+                    os.makedirs(os.path.join(cfg.trainers.output_dir, 'result'), exist_ok=True)
+                    with open(os.path.join(cfg.trainers.output_dir, f'result/eval_timing_{epoch}.json'),
+                              'w', encoding='utf-8') as handle:
+                        json.dump(eval_timings, handle, ensure_ascii=False, indent=2)
             eval_time = (time.time() - eval_start_time) / 60
             if fabric.local_rank == 0:
                 print(f'Evaluation Time: {eval_time:.2f} mins')

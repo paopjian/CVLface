@@ -69,11 +69,13 @@ python bench_260922/test_external_trt_eval.py    # 外挂 TRT 评估链路
 9. **RecSource npy offsets 缓存** (`train.offsets.npy`) 的 tmp 文件名必须 pid 唯一, 否则并发首开竞态互相 rename。
 10. **口径差异**: 生产 evaluator 是 normal+flip 两遍取平均; portable_eval 单遍无 flip — TPIR 有可预期小差, 交叉验证时以此解释, 不是 bug。
 11. mxnet 已全部移除: RecordIO 读取走纯 Python `dataset/recordio_reader.py` (fork-safe, PID 变化自动重开), 不要重新引入 mxnet。
+12. **THP 同步规整死窗口**: 进程内评估的 GB 级 CPU 大数组操作 (sklearn normalize 等) 在 THP `defrag=madvise` + 内存碎片化时触发内核同步 direct compaction, 吞吐跌 1~2 个量级, 表现为评估期间全 GPU 空转且耗时无规律波动 (7 卡机 2026-09-23 A/B 验证: defrag=never 后 compact_stall 冻结、单集 656s→164s)。机器级修复 `echo never > /sys/kernel/mm/transparent_hugepage/defrag` (已持久化于 /etc/tmpfiles.d/thp-defrag.conf); `train_opt.py` 启动时另有进程级 prctl(PR_SET_THP_DISABLE) 保险 (`CVLFACE_DISABLE_THP=0` 关闭)。换新机器先查 `grep compact_stall /proc/vmstat` 是否持续增长。
+13. **断点续训 wandb 重连**: `train_opt.py` 的 `resolve_wandb_run` 按 CLI > checkpoint 存档 > 旧 run 目录解析 > 新生成的优先级定 run id (WandbLogger 内部 resume="allow"); 重启训练**必须**带 `trainers.resume` 才能重连同一 wandb run, 否则新开 run。
 
 ## Git
 
-仓库根在 **4 级之上** (`/root/zhaokj/CVLface`), 本工作区**整体未跟踪** (`git status` 显示 `?? ./`)。
-近期 v7 相关 commit 都落在兄弟目录 `work_0605`。在此改代码默认不会被提交; 若需提交, 明确告知用户路径归属。
+仓库根在 **4 级之上** (`/root/zhaokj/CVLface`)。本工作区已入库跟踪 (main 分支, 2026-09-22 起; bench 产物/权重/运行日志经 .gitignore 排除)。
+兄弟目录 `work_0605` 亦有跟踪。远端 origin (github paopjian/CVLface) 在本机无 HTTPS 凭据, push 需在有凭据的终端执行。
 
 ## 文档优先级
 
