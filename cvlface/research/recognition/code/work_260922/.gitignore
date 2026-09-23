@@ -1,0 +1,15 @@
+wandb/
+mlruns/
+lightning_logs/
+*.db
+
+# 权重/缓存类大文件 (代码库不存模型产物)
+*.pt
+*.npy
+*.pkl
+*.engine
+*.onnx
+
+# bench 产物: 结果与 engine 不入库, 脚本与报告保留
+bench_260922/results/
+bench_260922/engines/

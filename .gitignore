@@ -156,3 +156,5 @@ experiments
 playground
 preprocessing
 TODO.md
+# 预训练权重不入库 (README/占位文件已跟踪)
+cvlface/pretrained_models/recognition/

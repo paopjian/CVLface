@@ -1,0 +1,11 @@
+
+data_root: '/data1/dataset_260918'
+rec: 'train_rec'
+color_space: 'RGB'
+num_classes: 823875
+num_image: 38796753
+
+repeated_sampling_cfg: null
+semi_sampling_cfg: null
+
+model_save_dir: ''
