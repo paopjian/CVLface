@@ -141,9 +141,16 @@ run_stage() {
 }
 
 # ----------------------- 公共参数 (四阶段一致) -----------------------
+# epoch 末评估走外挂 TRT 单进程链路 (eval_all_trt_single: nvjpeg 解码 + TRT fp16
+# + v7 匹配, 无 NCCL/fabric), 比进程内评估快数倍; 结果 JSON 回读后走同一套
+# summary/best/早停 逻辑, 指标键名一致 (如 work_260922_34t/tpir_at_far_1e-10)。
+# 注意: TRT fp16 与进程内 torch bf16 评估存在可预期的小口径差, 跨阶段对比时以此解释。
 COMMON=(
     trainers.num_workers=8
     trainers.precision=bf16-mixed
+    trainers.external_eval=True
+    trainers.external_eval_backend=trt
+    trainers.external_eval_precision=fp16
     models=iresnet/configs/v1_ir101.yaml
     dataset=configs/dataset_260922_train.yaml
     dataset.model_save_dir="${SAVE_ROOT}"
@@ -175,10 +182,13 @@ S1_DIR="${LAST_STAGE_DIR}"
 ################################################################################
 # s2: body.36~48+output_layer 训练 + 分类器 0.1x lr 同步微调 (cosine, 15 epoch)
 #     冻结段 BN 维持 eval, 解冻段 BN 随 train 更新 (train_opt.py 内建)
+# wandb_run_id 钉在 09-22 首发的原 run (2c18pov1), 使 03-58 重启后的 epoch 合并
+# 回同一曲线; s2 完成后此参数不再被使用, 留着无害。其余阶段 id 自动生成/续连。
 ################################################################################
 run_stage s2 "${CAMPAIGN}_s2_body36" 15 \
     trainers.batch_size=512 \
     "${COMMON[@]}" \
+    trainers.wandb_run_id=2c18pov1 \
     models.start_from="${S1_DIR}/model.pt" \
     models.freeze=True \
     data_augs=configs/gridsample_v2_numpy.yaml \

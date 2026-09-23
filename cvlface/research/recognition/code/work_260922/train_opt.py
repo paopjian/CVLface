@@ -200,6 +200,38 @@ def broadcast_should_stop(fabric, should_stop):
     fabric.broadcast(stop_tensor, src=0)
     return stop_tensor.item()
 
+def resolve_wandb_run(resume_dir, prefix, override_id=''):
+    """断点续训时重连之前的 wandb run, 避免每次重启新建 run。
+
+    id 解析优先级: CLI 显式指定 > resume checkpoint 的 config.yaml 里存的
+    trainers.wandb_run_id > 原始 run 目录 wandb/latest-run 的目录名解析
+    (run-<时间戳>-<id>) > 按 prefix+时间戳新生成。
+    返回 (run_id, run_name); run_name 取原始 output_dir 名, 保持面板显示稳定。
+    """
+    run_id = override_id or None
+    run_name = None
+    if resume_dir and not run_id:
+        saved_cfg_path = os.path.join(resume_dir, 'config.yaml')
+        if os.path.isfile(saved_cfg_path):
+            try:
+                saved = omegaconf.OmegaConf.load(saved_cfg_path)
+                run_id = omegaconf.OmegaConf.select(saved, 'trainers.wandb_run_id') or None
+                prev_out = omegaconf.OmegaConf.select(saved, 'trainers.output_dir')
+                if prev_out:
+                    prev_out = str(prev_out)
+                    run_name = os.path.basename(prev_out)
+                    if not run_id and os.path.exists(os.path.join(prev_out, 'wandb', 'latest-run')):
+                        cand = os.path.basename(os.path.realpath(
+                            os.path.join(prev_out, 'wandb', 'latest-run'))).split('-')[-1]
+                        if len(cand) == 8:
+                            run_id = cand
+            except Exception as error:
+                print(f'wandb run id 恢复失败 (忽略, 将新建 run): {error}')
+    if not run_id:
+        run_id = f"{prefix}_{datetime.datetime.now().strftime('%m%d_%H%M%S')}"
+    return run_id, run_name
+
+
 if __name__ == '__main__':
     cfg: Config = config.init(root)
     # print(f"cfg:{cfg}")
@@ -214,10 +246,17 @@ if __name__ == '__main__':
     csv_logger = CSVLogger(root_dir=cfg.trainers.output_dir, flush_logs_every_n_steps=1)
     loggers.append(csv_logger)
     if cfg.trainers.using_wandb:
+        # WandbLogger 内部固定 resume="allow": id 命中已有 run 则续写, 否则以该 id 新建
+        wandb_run_id, wandb_run_name = resolve_wandb_run(
+            cfg.trainers.resume, cfg.trainers.prefix, cfg.trainers.wandb_run_id)
+        cfg.trainers.wandb_run_id = wandb_run_id  # 随每 epoch checkpoint 的 config.yaml 落盘, 供下次续训重连
         wandb_logger = WandbLogger(project=cfg.trainers.task, save_dir=cfg.trainers.output_dir,
-                                   name=os.path.basename(cfg.trainers.output_dir),
+                                   name=wandb_run_name or os.path.basename(cfg.trainers.output_dir),
+                                   id=wandb_run_id,
                                    log_model=False)
         loggers.append(wandb_logger)
+        print(f'wandb run: id={wandb_run_id} '
+              f'name={wandb_run_name or os.path.basename(cfg.trainers.output_dir)} (resume=allow)')
 
     # grad_max_norm?
     nccl_timeout_min = getattr(cfg.trainers, 'timeout_minutes', 120)

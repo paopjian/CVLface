@@ -25,6 +25,10 @@ wandb_log_all: False
 resume: ''
 timeout_minutes: 120  # NCCL 通信超时(分钟)，评估耗时长时需增大
 
+# wandb 断点续训重连: 留空自动解析 (checkpoint 里存的 id > 旧 run 目录解析 > 新生成);
+# 也可显式指定 trainers.wandb_run_id=<id> 强制重连某个 run
+wandb_run_id: ''
+
 # 在独立进程树中执行每个 epoch 的评估，避免评估 CUDA context 残留在训练进程中。
 external_eval: False
 external_eval_timeout_minutes: 120
