@@ -1,0 +1,22 @@
+
+# TopoFR Loss Configuration (using CosFace as base)
+# Paper also evaluates with CosFace
+
+margin_loss_name: 'topofr'
+
+# Base margin loss type
+base_loss: 'cosface'
+
+# CosFace parameters (used if base_loss='cosface')
+s: 64.0
+m: 0.4
+
+# Topological loss weight (paper uses 0.1)
+topo_weight: 0.1
+
+# GUM (Gauss-Uniform Mixture) model for sample weighting
+use_gum: true
+temp: 1
+
+# PartialFC
+interclass_filtering_threshold: 0

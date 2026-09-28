@@ -1,0 +1,22 @@
+
+# TopoFR Loss Configuration
+# Base: ArcFace with topological alignment
+
+margin_loss_name: 'topofr'
+
+# Base margin loss type: 'arcface', 'cosface', or 'adaface'
+base_loss: 'arcface'
+
+# ArcFace parameters (used if base_loss='arcface')
+s: 64.0
+m: 0.5
+
+# Topological loss weight (paper uses 0.1)
+topo_weight: 0.1
+
+# GUM (Gauss-Uniform Mixture) model for sample weighting
+use_gum: true
+temp: 1
+
+# PartialFC
+interclass_filtering_threshold: 0
