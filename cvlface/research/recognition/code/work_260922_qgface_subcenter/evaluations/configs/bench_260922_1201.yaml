@@ -1,0 +1,11 @@
+data_root: '/data1/dataset_260918'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "work_1201": {
+    'path': 'test_1201',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+}

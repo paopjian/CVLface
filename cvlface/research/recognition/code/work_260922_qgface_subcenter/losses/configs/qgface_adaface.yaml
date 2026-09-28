@@ -1,0 +1,9 @@
+margin_loss_name: 'adaface'
+
+interclass_filtering_threshold: 0
+
+m: 0.4
+h: 0.333
+t_alpha: 0.01
+# QGFace 质量门控: !=0 时按 AdaFace margin_scaler 的 sigmoid 门控缩放分类 logit
+quality_scale: 0.2

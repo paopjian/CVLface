@@ -1,0 +1,11 @@
+
+data_root: '/data2/dataset_1201_rec'
+rec: 'val'
+color_space: 'RGB'
+num_classes: 10000
+num_image: 588357
+
+repeated_sampling_cfg: null
+semi_sampling_cfg: null
+
+model_save_dir: ''

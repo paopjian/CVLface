@@ -1,0 +1,26 @@
+data_root: '/data1/dataset/rec'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "agedb_30": {
+    'path': 'facerec_val/agedb_30',
+    'evaluation_type': 'verification',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 4
+  },
+  "IJBC_gt_aligned": {
+    'path': 'facerec_val/IJBC_gt_aligned',
+    'evaluation_type': 'ijbbc',
+    'color_space': 'RGB',
+    'batch_size': 2048,
+    'num_workers': 8
+  },
+  "tinyface": {
+    'path': 'facerec_val/tinyface_aligned_pad_0.1',
+    'evaluation_type': 'tinyface',
+    'color_space': 'RGB',
+    'batch_size': 2048,
+    'num_workers': 8
+  },
+}
+
