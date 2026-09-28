@@ -27,7 +27,7 @@
 #   s1  分类器训练, backbone 全冻结                  step  lr=0.008, 5  epoch
 #   s2  body.36~48+output_layer 训练 + 分类器 0.1x lr  cos  lr=0.008, 15 epoch
 #   s3  分类器训练, backbone 全冻结                  step  lr=0.006, 5  epoch
-#   s4  全模型训练     + 分类器 0.1x lr              cos  lr=0.0008, 15 epoch
+#   s4  全模型训练     + 分类器 0.1x lr              cos  lr=0.0004, 15 epoch (bs 128, 见 s4 注)
 #
 # 断点续传 (直接重跑本脚本即可, 幂等):
 #   - 阶段内: 扫描该 prefix 的所有 run 目录, 取"全局最大完整 epoch"(pipeline.pt+
@@ -238,10 +238,14 @@ run_stage s3 "${CAMPAIGN}_s3_cls" 5 \
 S3_DIR="${LAST_STAGE_DIR}"
 
 ################################################################################
-# s4: 全模型微调 + 分类器 0.1x lr 同步微调 (cosine, 15 epoch, bs 256)
+# s4: 全模型微调 + 分类器 0.1x lr 同步微调 (cosine, 15 epoch)
+# 2026-09-24: bs 256/lr 0.0008 在 epoch0 第一个 backward 即 OOM (K=3+sr0.4 使
+# 激活中心行 ~14.1万/卡, 全模型 backward 激活+logits fp32 临时超 24G)。
+# 改 bs 128 + lr 减半 0.0004 (线性缩放规则); 若仍 OOM 下一档:
+# 叠加 classifiers.sample_rate=0.2 和/或 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True。
 ################################################################################
 run_stage s4 "${CAMPAIGN}_s4_full" 15 \
-    trainers.batch_size=256 \
+    trainers.batch_size=128 \
     "${COMMON[@]}" \
     models.start_from="${S3_DIR}/model.pt" \
     models.freeze=False \
@@ -250,7 +254,7 @@ run_stage s4 "${CAMPAIGN}_s4_full" 15 \
     pefts.classifier_ckpt_dir="${S3_DIR}" \
     classifiers.freeze=False \
     optims=configs/step_sgd.yaml \
-    optims.lr=0.0008 optims.num_epoch=15 optims.warmup_epoch=2 \
+    optims.lr=0.0004 optims.num_epoch=15 optims.warmup_epoch=2 \
     optims.momentum=0.9 optims.weight_decay=0.0005 \
     optims.lr_lambda=0.1 optims.max_grad_norm=5.0 \
     optims.scheduler=cosine \
