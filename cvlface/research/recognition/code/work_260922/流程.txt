@@ -234,7 +234,7 @@ fabric run --devices=8 --precision="bf16-mixed" \
 FINAL_CKPT="/data1/dataset_0605/train_output/ft_ir101_s4_full_0605_06-XX_0/checkpoints_every_epoch/best"
 
 conda run -n cvlface fabric run --strategy=ddp --devices=8 --precision="bf16-mixed" \
-    eval.py --num_gpu 7 --eval_config_name test_20260605 --ckpt_dir ${FINAL_CKPT}
+    eval.py --num_gpu 7 --eval_config_name test_20260922 --ckpt_dir ${FINAL_CKPT}
 
 
 ################################################################################

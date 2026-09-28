@@ -1,5 +1,5 @@
 """
-eval_all_3_single.py - TRT 多卡评估 (无 fabric/NCCL)
+eval_all_trt_single.py - TRT 多卡评估 (无 fabric/NCCL)
 
 设计:
 - 主进程构建 TRT engine (单卡, 一次性)
@@ -8,7 +8,7 @@ eval_all_3_single.py - TRT 多卡评估 (无 fabric/NCCL)
 - 聚合: /dev/shm 写文件 → 主进程合并 → compute_metric
 - 完全不依赖 fabric, 不触发 NCCL
 
-由 eval_all_3_launcher.py 调用。
+由 eval_all_trt_launcher.py 调用。
 """
 import pyrootutils
 root = pyrootutils.setup_root(

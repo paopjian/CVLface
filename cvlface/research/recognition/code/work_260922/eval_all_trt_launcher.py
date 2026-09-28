@@ -1,5 +1,5 @@
 """
-eval_all_3_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
+eval_all_trt_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
 
 设计:
 - 遍历 checkpoint 目录，对每个 ckpt 调用 eval_3_single.py
@@ -7,11 +7,11 @@ eval_all_3_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
 - 支持断点续评
 
 用法:
-python eval_all_3_launcher.py \
+python eval_all_trt_launcher.py \
   --num_gpu 7 \
-  --eval_config_name test_20260605 \
+  --eval_config_name test_20260922 \
   --ckpt_dir /data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch \
-  --project_name work_0605_test \
+  --project_name work_260922_test \
   --name s2_body36_0605_06-10_2_trt
 """
 import os
@@ -74,10 +74,10 @@ def find_existing_run(project_name, run_name):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_gpu', type=int, default=7)
-    parser.add_argument('--eval_config_name', type=str, default='test_20260605')
+    parser.add_argument('--eval_config_name', type=str, default='test_20260922')
     parser.add_argument('--ckpt_dir', type=str, required=True)
     parser.add_argument('--name', type=str, required=True)
-    parser.add_argument('--project_name', type=str, default="work_0605_test")
+    parser.add_argument('--project_name', type=str, default="work_260922_test")
     parser.add_argument('--precision', type=str, default='fp16',
                         choices=['fp16', 'fp32'],
                         help="TRT engine 精度: fp16(默认, 快) / fp32(更稳, 更接近 PyTorch)")

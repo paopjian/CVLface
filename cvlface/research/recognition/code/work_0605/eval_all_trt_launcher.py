@@ -1,5 +1,5 @@
 """
-eval_all_3_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
+eval_all_trt_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
 
 设计:
 - 遍历 checkpoint 目录，对每个 ckpt 调用 eval_3_single.py
@@ -7,7 +7,7 @@ eval_all_3_launcher.py - TRT 多卡评估启动器 (无 fabric/NCCL)
 - 支持断点续评
 
 用法:
-python eval_all_3_launcher.py \
+python eval_all_trt_launcher.py \
   --num_gpu 7 \
   --eval_config_name test_20260605 \
   --ckpt_dir /data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch \

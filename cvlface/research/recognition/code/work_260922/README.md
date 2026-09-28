@@ -296,9 +296,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 fabric run \
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 \
 LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH \
 python eval_all_trt_launcher.py \
-  --num_gpu 7 --eval_config_name test_20260605 \
+  --num_gpu 7 --eval_config_name test_20260922 \
   --ckpt_dir /path/to/checkpoints_every_epoch \
-  --project_name work_0605_test --name s2_body36_trt \
+  --project_name work_260922_test --name s2_body36_trt \
   --timeout_minutes 90
 ```
 
@@ -308,9 +308,9 @@ python eval_all_trt_launcher.py \
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 \
 LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH \
 python eval_all_torch_launcher.py \
-  --num_gpu 7 --eval_config_name test_20260605 \
+  --num_gpu 7 --eval_config_name test_20260922 \
   --ckpt_dir /path/to/checkpoints_every_epoch \
-  --project_name work_0605_test --name s2_body36_compile \
+  --project_name work_260922_test --name s2_body36_compile \
   --compile --compile_mode max-autotune --timing \
   --timeout_minutes 270
 ```

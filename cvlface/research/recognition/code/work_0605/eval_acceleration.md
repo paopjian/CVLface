@@ -178,9 +178,9 @@ serialized = builder.build_serialized_network(network, config)
 
 ---
 
-## 3. eval_all_3 方案 (TRT 多卡, 无 fabric)
+## 3. eval_all_trt 方案 (TRT 多卡, 无 fabric)
 
-`eval_all_3_single.py` 设计:
+`eval_all_trt_single.py` 设计:
 - 主进程构建 TRT engine (单卡, 一次性)
 - 多进程并行: 每卡一个进程加载 engine 提取特征 (normal + flip 合并为单次 forward)
 - 数据分片: DataLoader + DistributedSampler (手动)
@@ -332,7 +332,7 @@ serialized = builder.build_serialized_network(network, config)
 | 优化 | 实测收益 | 复杂度 | 状态 |
 |------|---------|--------|------|
 | TensorRT FP16 | -25% 特征提取 (455→342s) | 高 | 已验证 |
-| TRT 多卡无 fabric | 避免 NCCL timeout | 中 | eval_all_3 已实现 |
+| TRT 多卡无 fabric | 避免 NCCL timeout | 中 | eval_all_trt 已实现 |
 | torch.compile + FP16 | -13% 特征提取 (455→396s) | 低 | 已验证 |
 | torch.compile + BF16 | -9% 特征提取 (455→416s) | 低 | 已验证 |
 | 增大 num_workers | -5~10% 特征提取 | 低 | 已配 |

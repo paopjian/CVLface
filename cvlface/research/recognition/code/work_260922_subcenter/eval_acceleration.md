@@ -178,9 +178,9 @@ serialized = builder.build_serialized_network(network, config)
 
 ---
 
-## 3. eval_all_3 方案 (TRT 多卡, 无 fabric)
+## 3. eval_all_trt 方案 (TRT 多卡, 无 fabric)
 
-`eval_all_3_single.py` 设计:
+`eval_all_trt_single.py` 设计:
 - 主进程构建 TRT engine (单卡, 一次性)
 - 多进程并行: 每卡一个进程加载 engine 提取特征 (normal + flip 合并为单次 forward)
 - 数据分片: DataLoader + DistributedSampler (手动)
@@ -332,7 +332,7 @@ serialized = builder.build_serialized_network(network, config)
 | 优化 | 实测收益 | 复杂度 | 状态 |
 |------|---------|--------|------|
 | TensorRT FP16 | -25% 特征提取 (455→342s) | 高 | 已验证 |
-| TRT 多卡无 fabric | 避免 NCCL timeout | 中 | eval_all_3 已实现 |
+| TRT 多卡无 fabric | 避免 NCCL timeout | 中 | eval_all_trt 已实现 |
 | torch.compile + FP16 | -13% 特征提取 (455→396s) | 低 | 已验证 |
 | torch.compile + BF16 | -9% 特征提取 (455→416s) | 低 | 已验证 |
 | 增大 num_workers | -5~10% 特征提取 | 低 | 已配 |
@@ -370,9 +370,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 \
 LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH \
 /root/miniconda3/envs/cvlface/bin/python eval_all_trt_launcher.py \
   --num_gpu 7 \
-  --eval_config_name test_20260605 \
+  --eval_config_name test_20260922 \
   --ckpt_dir /data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch \
-  --project_name work_0605_test \
+  --project_name work_260922_test \
   --name s2_body36_0605_trt \
   --timeout_minutes 90
 ```
@@ -393,9 +393,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 \
 LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:$LD_LIBRARY_PATH \
 /root/miniconda3/envs/cvlface/bin/python eval_all_torch_launcher.py \
   --num_gpu 7 \
-  --eval_config_name test_20260605 \
+  --eval_config_name test_20260922 \
   --ckpt_dir /data2/dataset_0605/train_output/s2_body36_0605_06-10_2/checkpoints_every_epoch \
-  --project_name work_0605_test \
+  --project_name work_260922_test \
   --name s2_body36_0605_compile \
   --compile --compile_mode max-autotune --timing \
   --timeout_minutes 270
