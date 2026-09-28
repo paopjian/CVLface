@@ -45,7 +45,7 @@ def run_combined_evaluations(evaluators_dict, combined_config):
     """
     import numpy as np
     import time
-    from .cluster_utils import get_sim_matrix_large_scale_v4
+    from .cluster_utils import get_sim_matrix_large_scale_v7
     from .custom_verification_evaluator import compute_tpir_from_hist
 
     all_combined_results = {}
@@ -93,18 +93,21 @@ def run_combined_evaluations(evaluators_dict, combined_config):
         start = time.time()
         target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
 
-        # _available_gpus = torch.cuda.device_count()
-        _available_gpus = 8
-        pos_hist, neg_hist = get_sim_matrix_large_scale_v4(
+        # 与 type4 评估器同口径: v7 CUDA fp16 双桶核, EVAL_NUM_GPUS 覆盖 GPU 数 (默认 8)
+        eval_num_gpus = int(os.environ.get('EVAL_NUM_GPUS', '8'))
+        pos_hist, neg_hist = get_sim_matrix_large_scale_v7(
             query_feats_list=combined_embeddings,
             query_ids=combined_query_ids,
-            num_gpus=_available_gpus,
-            block_size=2048 * 2,
-            show_progress=True,
+            num_gpus=eval_num_gpus,
+            block_size=16384,
+            hist_bins=2000,
+            hist_range=(-1.0, 1.0),
         )
 
+        # hist_bins/hist_range 必须与上面的直方图一致, 否则阈值映射错位
         result, thresholds = compute_tpir_from_hist(
-            pos_hist, neg_hist, target_fars=target_fars
+            pos_hist, neg_hist, hist_bins=2000, hist_range=(-1.0, 1.0),
+            target_fars=target_fars
         )
         print(f"合并评估 '{combined_name}' 耗时: {time.time() - start:.2f} 秒")
         print(f"result: {result}")
