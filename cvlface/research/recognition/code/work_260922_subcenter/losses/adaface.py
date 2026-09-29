@@ -51,6 +51,9 @@ class AdaFaceLoss(torch.nn.Module):
         #########
         with torch.no_grad():
             # g_angular
+            # cosine 在 bf16 下可舍入到 |x|>1 (K>1 子中心 amax 放大该风险),
+            # 不夹回 arccos 定义域会出 NaN 并经 backward 扩散到全部梯度
+            target_logit = target_logit.float().clamp_(-1 + 1e-7, 1 - 1e-7)
             target_logit.arccos_()
             margin_final_logit = target_logit + (self.m * margin_scaler * -1)
             margin_final_logit.cos_()
