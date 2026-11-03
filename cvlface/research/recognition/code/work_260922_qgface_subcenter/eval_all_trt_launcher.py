@@ -53,6 +53,9 @@ def find_existing_run(project_name, run_name):
     api = wandb.Api()
     try:
         runs = api.runs(project_name, filters={"display_name": run_name})
+        # list() 触发实际查询: project 尚不存在 (首次评估新 project) 时在此抛
+        # ValueError, 须在 try 内完成, 否则 if not runs 的惰性求值会逃过捕获
+        runs = list(runs)
     except Exception as e:
         print(f"查询 wandb 失败: {e}")
         return None, set()
