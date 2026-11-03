@@ -1,0 +1,24 @@
+name: 'TrainQGFacePipeline'
+resume: ${trainers.resume}
+eval_pipeline_name: 'infer_model_pipeline'
+
+# QG 对比损失权重; 四阶段脚本里 s1/s3 覆盖为 0.0, s2/s4 为 1.0
+contrast_weight: 1.0
+contrast_start_epoch: 0
+
+qgface:
+  queue_size: 8192        # >= 2x 全局 batch (256*8*2=4096 <= 8192)
+  scale: 64.0
+  margin: 0.4
+  margin_method: null
+  quality_scale: 0.2
+  quality_scale_method: 'sgn'
+  quality_scale_range: 'half'
+  quality_select_method: 'low'
+  pair_coupling: 'D2N'
+  mask_same_class: false
+  detach_positive: false
+  rescale: true
+  rescale_reference_size: 129
+  h: 0.333
+  t_alpha: 0.01

@@ -1,0 +1,18 @@
+# QGFace 双优化器基座: num_epoch/lr/scheduler/milestones 等由四阶段脚本 CLI 覆盖。
+# classifier_lr 是 QGFace 双优化器路径下 PFC 分类器的独立基准 lr
+# (取代单优化器路径的 classifier_lr_scale, 见 optims/optims.py: make_qgface_optimizers)。
+num_epoch: 15
+optimizer: 'sgd'
+lr: 0.008
+momentum: 0.9
+weight_decay: 0.0005
+scheduler: 'cosine'
+filter_bias_and_bn: true
+warmup_epoch: 2
+lr_milestones: [2, 4]
+lr_lambda: 0.3
+max_grad_norm: 5.0
+# 分类器独立裁剪预算 (缺省同 max_grad_norm)
+classifier_max_grad_norm: 5.0
+# 分类器独立基准 lr (脚本里 s2/s4 覆盖为 0.1x)
+classifier_lr: 0.008
