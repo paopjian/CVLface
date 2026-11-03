@@ -1,0 +1,11 @@
+
+data_root: '/data2/dataset_0213_rec'
+rec: 'train'
+color_space: 'RGB'
+num_classes: 336437
+num_image: 23067585
+
+repeated_sampling_cfg: null
+semi_sampling_cfg: null
+
+model_save_dir: ''

@@ -1,0 +1,4 @@
+name: full
+model_ckpt_dir: '/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_epoch44'
+classifier_ckpt_dir: ''
+center_paths: []

@@ -1,0 +1,9 @@
+
+data_root: '/data2/dataset_1201_rec'
+rec: 'test'
+color_space: 'RGB'
+num_classes: 45000
+num_image: 2665669
+
+repeated_sampling_cfg: null
+semi_sampling_cfg: null
