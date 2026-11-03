@@ -33,10 +33,10 @@ wandb_run_id: ''
 external_eval: False
 external_eval_timeout_minutes: 120
 external_eval_poll_interval_seconds: 1.0
-# 外挂评估的 fabric 绝对路径 — 机器相关! star(192.168.2.100) 用 miniconda3,
-# 另一台 8 卡机用 /root/anaconda3/envs/cvlface。评估子进程的 python 由本路径推导,
+# 外挂评估的 fabric 绝对路径 — 机器相关! 本机 qingsi(192.168.2.103) 用 anaconda3,
+# star(192.168.2.100) 用 /root/miniconda3/envs/cvlface。评估子进程的 python 由本路径推导,
 # 指错则每 epoch 评估 FileNotFoundError (2026-09-24 s2 全程 eval 失败事故)。
-external_eval_fabric_bin: '/root/miniconda3/envs/cvlface/bin/fabric'
+external_eval_fabric_bin: '/root/anaconda3/envs/cvlface/bin/fabric'
 
 local_rank: -1  # placeholder
 world_size: -1  # placeholder
