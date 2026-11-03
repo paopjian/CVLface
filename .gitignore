@@ -158,3 +158,17 @@ preprocessing
 TODO.md
 # 预训练权重不入库 (README/占位文件已跟踪)
 cvlface/pretrained_models/recognition/
+
+# ---- 运行产物/本地工具排除 (2026-11-03 整理) ----
+# ZCode 会话产物
+.zcode/
+.zcodeignore
+# 评估运行输出 (结果在 wandb / 各机器本地, 不入库)
+**/eval3_results/
+# TRT 引擎缓存 (按机器/卡型生成, 数百 MB 二进制)
+**/trt_engine_cache*/
+*.engine
+# 手工备份文件 (*.bak / *.bak.1103 / *.bak_1022)
+*.bak*
+# wandb 运行记录兜底 (各工作区自带 .gitignore 已忽略)
+wandb/
