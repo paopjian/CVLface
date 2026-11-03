@@ -1,0 +1,142 @@
+[
+  {
+    "config": "ImgFolder_w8_base",
+    "num_batches": 200,
+    "avg_data_ms": 3.363083600997925,
+    "p95_data_ms": 3.588783740997314,
+    "avg_compute_ms": 107.353595495224,
+    "throughput": 4624.416160053263,
+    "throughput_total": 4624.416160053263,
+    "gpu_util_pct": 96.96244176717482
+  },
+  {
+    "config": "ImgFolder_w8_persist",
+    "num_batches": 200,
+    "avg_data_ms": 3.8272452354431152,
+    "p95_data_ms": 3.865337371826172,
+    "avg_compute_ms": 109.59118723869324,
+    "throughput": 4514.257416815871,
+    "throughput_total": 4514.257416815871,
+    "gpu_util_pct": 96.6255526972515
+  },
+  {
+    "config": "ImgFolder_w8_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 5.143696069717407,
+    "p95_data_ms": 4.120063781738279,
+    "avg_compute_ms": 109.40623760223389,
+    "throughput": 4469.666490303419,
+    "throughput_total": 4469.666490303419,
+    "gpu_util_pct": 95.50964727360912
+  },
+  {
+    "config": "ImgFolder_w12_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 5.880061388015747,
+    "p95_data_ms": 10.822784900665207,
+    "avg_compute_ms": 110.08180022239685,
+    "throughput": 4415.24474417394,
+    "throughput_total": 4415.24474417394,
+    "gpu_util_pct": 94.92931442600457
+  },
+  {
+    "config": "ImgFolder_w16_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 6.959761381149292,
+    "p95_data_ms": 22.30031490325923,
+    "avg_compute_ms": 111.2342119216919,
+    "throughput": 4331.862155848959,
+    "throughput_total": 4331.862155848959,
+    "gpu_util_pct": 94.11157676938677
+  },
+  {
+    "config": "LMDB_w8_base",
+    "num_batches": 200,
+    "avg_data_ms": 3.8581812381744385,
+    "p95_data_ms": 3.8033366203308105,
+    "avg_compute_ms": 110.24660587310791,
+    "throughput": 4487.103591023439,
+    "throughput_total": 4487.103591023439,
+    "gpu_util_pct": 96.6187384983141
+  },
+  {
+    "config": "LMDB_w8_persist",
+    "num_batches": 200,
+    "avg_data_ms": 3.8170409202575684,
+    "p95_data_ms": 3.8924455642700186,
+    "avg_compute_ms": 109.71296906471252,
+    "throughput": 4509.820795997307,
+    "throughput_total": 4509.820795997307,
+    "gpu_util_pct": 96.63785732004877
+  },
+  {
+    "config": "LMDB_w8_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 3.879070281982422,
+    "p95_data_ms": 4.0120720863342285,
+    "avg_compute_ms": 110.5575954914093,
+    "throughput": 4474.090507092071,
+    "throughput_total": 4474.090507092071,
+    "gpu_util_pct": 96.61029071778114
+  },
+  {
+    "config": "LMDB_w12_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 3.9877367019653316,
+    "p95_data_ms": 4.2218327522277805,
+    "avg_compute_ms": 111.05031490325928,
+    "throughput": 4450.701249331198,
+    "throughput_total": 4450.701249331198,
+    "gpu_util_pct": 96.53354985909355
+  },
+  {
+    "config": "LMDB_w16_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 3.663591146469116,
+    "p95_data_ms": 3.9515256881713863,
+    "avg_compute_ms": 110.65064549446106,
+    "throughput": 4478.8822026449025,
+    "throughput_total": 4478.8822026449025,
+    "gpu_util_pct": 96.79515758131095
+  },
+  {
+    "config": "RecordIO_w8_base",
+    "num_batches": 200,
+    "avg_data_ms": 3.6011719703674316,
+    "p95_data_ms": 3.947424888610839,
+    "avg_compute_ms": 111.35398745536804,
+    "throughput": 4453.910573111489,
+    "throughput_total": 4453.910573111489,
+    "gpu_util_pct": 96.86732462609136
+  },
+  {
+    "config": "RecordIO_w8_persist",
+    "num_batches": 200,
+    "avg_data_ms": 3.957291841506958,
+    "p95_data_ms": 3.7665605545043945,
+    "avg_compute_ms": 111.45110845565796,
+    "throughput": 4436.41882810655,
+    "throughput_total": 4436.41882810655,
+    "gpu_util_pct": 96.57105389961447
+  },
+  {
+    "config": "RecordIO_w8_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 3.660914897918701,
+    "p95_data_ms": 3.96054983139038,
+    "avg_compute_ms": 110.3235924243927,
+    "throughput": 4491.838514090597,
+    "throughput_total": 4491.838514090597,
+    "gpu_util_pct": 96.78823466107826
+  },
+  {
+    "config": "RecordIO_w12_pf3",
+    "num_batches": 200,
+    "avg_data_ms": 4.124177694320679,
+    "p95_data_ms": 3.89989614486694,
+    "avg_compute_ms": 110.67742586135864,
+    "throughput": 4459.8680170149155,
+    "throughput_total": 4459.8680170149155,
+    "gpu_util_pct": 96.40756089933845
+  }
+]

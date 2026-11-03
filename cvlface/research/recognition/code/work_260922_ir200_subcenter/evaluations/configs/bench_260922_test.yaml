@@ -1,0 +1,11 @@
+data_root: '/data1/dataset_260918'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "bench_test_glint": {
+    'path': 'test_glint',
+    'evaluation_type': 'custom_verification4',
+    'color_space': 'RGB',
+    'batch_size': 256,
+    'num_workers': 5
+  },
+}
