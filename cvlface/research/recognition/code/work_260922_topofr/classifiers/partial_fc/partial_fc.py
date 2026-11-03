@@ -218,6 +218,12 @@ class PartialFC_V2(torch.nn.Module):
             else:
                 raise ValueError(f"Unexpected return from TopoFRLoss: {len(result)} values")
 
+            # TopoFRLoss 内部已完成 margin + 分布式CE + GUM 加权 + 拓扑项, 必须直接
+            # 返回。不能掉到下面的 dist_cross_entropy: 本分支没有重赋值 logits,
+            # 那样会丢弃 TopoFR 全部损失, 退化为对原始 cosine (无 margin/无 s 缩放)
+            # 的 CE —— 训练能跑但基本学不到东西, 属静默错误。
+            return loss
+
         elif isinstance(self.margin_softmax, CombinedMarginLoss):
             logits = self.margin_softmax(logits=logits, labels=labels)
         elif isinstance(self.margin_softmax, AdaFaceLoss):

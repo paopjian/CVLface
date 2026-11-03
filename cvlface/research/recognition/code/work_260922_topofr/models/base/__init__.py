@@ -100,6 +100,22 @@ class BaseModel(torch.nn.Module):
         if 'net.vit' in list(self.state_dict().keys())[-1] and 'pretrained_models' in pretrained_model_path:
             state_dict = {k.replace('net', 'net.vit'): v for k, v in state_dict.items()}
 
+        # insightface 风格预训练 (如 TopoFR Glint360K R200) 存的是裸 iresnet 模块的
+        # state_dict (conv1./layer1./.../fc./features.), 而 BaseModel 把网络挂在 self.net
+        # 下, key 带 net. 前缀, 两者 0 交集 => strict=False 静默跳过全部加载。
+        # 随机初始化的 backbone 在冻结(eval BN 用初始 running stats)下激活逐层放大
+        # 直至 fp32 溢出, NaN 沿 backbone -> PFC -> GUM 传导, 最后以 scipy 的
+        # "array must not contain infs or NaNs" 形式炸出, 极难定位。
+        # 0 交集时尝试补模型侧顶层前缀 (如 net.) 重映射, 只保留能对上的 key
+        # (TopoFR ckpt 里的裸 'weight' 是 Glint360K 36 万类 PFC 头, 本就应丢弃)。
+        model_keys = set(self.state_dict().keys())
+        if state_dict and not (set(state_dict.keys()) & model_keys):
+            prefix = next(iter(self.state_dict().keys())).split('.')[0] + '.'
+            remapped = {prefix + k: v for k, v in state_dict.items()
+                        if (prefix + k) in model_keys}
+            if remapped:
+                state_dict = remapped
+
         st_keys = list(state_dict.keys())
         self_keys = list(self.state_dict().keys())
         print('compatible keys in state_dict', len(set(st_keys).intersection(set(self_keys))), '/', len(st_keys))

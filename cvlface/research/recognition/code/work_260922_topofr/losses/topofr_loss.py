@@ -156,6 +156,16 @@ class TopoFRLoss(nn.Module):
                         1, labels_1d.view(-1, 1)).squeeze(1)
 
                 entropy_np = entropy.float().cpu().detach().numpy()
+                if not np.isfinite(entropy_np).all():
+                    # GUM 的 scipy eigh 只会抛 "array must not contain infs or NaNs",
+                    # 看不出源头; 这里明确指出是上游 backbone/logits 已经 NaN
+                    # (s1 冻结+eval 下预训练权重未加载/激活溢出时会出现).
+                    n_bad = int((~np.isfinite(entropy_np)).sum())
+                    raise RuntimeError(
+                        f"[TopoFR] entropy 含 {n_bad}/{entropy_np.size} 个非有限值: "
+                        f"上游 margin_logits/backbone 输出已是 NaN, GUM 无法加权。"
+                        f"常见原因: models.start_from 权重未真正加载 (看日志 "
+                        f"'compatible keys in state_dict N / M' 是否为 0)。")
 
                 # Alternate sign for paired samples (if using paired augmentation)
                 # In standard training, this just processes entropy as-is
