@@ -1,0 +1,17 @@
+name: 'partial_fc'
+sample_rate: 0.4
+num_subcenters: 3
+# ---- OHEM (online hard example mining, 分类版) ----
+# 每步按 per-sample loss 取最难的 ohem_ratio 比例样本回传 (loss=mean over kept)。
+# 建议范围 0.7~0.9: 过低会过度拟合困难(常含低质量/噪声)样本, 与 AdaFace 的
+# 自适应 margin 叠加时从温和值起步 (见 docs/ohem_research.md)。
+ohem_ratio: 0.7
+# 保留样本数下限 (全局 batch 512x7=3584 时基本不触发, 保护小 batch 调试)
+ohem_min_kept: 256
+# 有效 ratio 从 1.0 线性退火到 ohem_ratio 的步数; 0=立即生效。
+# s1 分类器随机初始化, 冷启动阶段先按标准 CE 收敛再逐步收紧。
+# 注意: 计数器存在 classifier checkpoint 里, 跨阶段(s2/s3/s4 加载上阶段分类器)
+# 会继续累计而不是重置, 即 warmup 只在整个战役的 s1 发生一次。
+ohem_warmup_steps: 1000
+start_from: ''
+freeze: False

@@ -1,0 +1,12 @@
+data_root: '/data/zkj-data/'
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "work": {
+    'path': 'dataset/val_aligned_rec',
+    'evaluation_type': 'custom_verification3',
+    'color_space': 'RGB',
+    'batch_size': 2048,
+    'num_workers': 8
+  },
+}
+

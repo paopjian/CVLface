@@ -1,0 +1,11 @@
+
+data_root: '/data1/dataset_0605'
+rec: 'train_lmdb'
+color_space: 'RGB'
+num_classes: 791509
+num_image: 37084481
+
+repeated_sampling_cfg: null
+semi_sampling_cfg: null
+
+model_save_dir: ''
