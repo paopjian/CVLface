@@ -33,7 +33,7 @@ wandb_run_id: ''
 external_eval: False
 external_eval_timeout_minutes: 120
 external_eval_poll_interval_seconds: 1.0
-external_eval_fabric_bin: '/root/anaconda3/envs/cvlface/bin/fabric'
+external_eval_fabric_bin: '/root/miniconda3/envs/cvlface/bin/fabric'
 
 local_rank: -1  # placeholder
 world_size: -1  # placeholder

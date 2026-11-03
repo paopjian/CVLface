@@ -2,6 +2,16 @@
 ################################################################################
 # 四阶段微调训练 — QGFace + SubCenter 变体 (work_260922_qgface_subcenter)
 #
+# 【服务器环境 — 本脚本仅适配此机器, 换机器必改下面三处路径】
+#   服务器:   star (192.168.2.100, 7x RTX 4090, 数据在 /data1/dataset_260918)
+#   cvlface:  /root/miniconda3/envs/cvlface (torch 2.12+cu126, python 3.12)
+#   必改三处: ① 本节 export 的环境路径 ② trainers/configs/default.yaml 的
+#             external_eval_fabric_bin (外挂评估的 python 由它推导, 指错则每
+#             epoch 评估 FileNotFoundError, 见 2026-09-24 s2 全程 eval 失败事故)
+#             ③ WORKDIR 等绝对路径
+#   对照:     另一台 8 卡机的环境在 /root/anaconda3/envs/cvlface (原脚本用它),
+#             两台机器路径不可混用。
+#
 # 相对 four_stage_260922.sh 的差异 (技术移植自 qgface_subcenter 分支):
 #   - 分类器: SubCenter PFC, 每类 K=3 个子中心, logit 取子中心内 amax
 #     (classifiers=configs/partial_fc_subcenter_k3_sample40.yaml)
@@ -23,10 +33,10 @@
 #     区 OOM 教训 (提交 d66022d: K=3+sr0.4 下每卡 256 图激活超 24G) 降到 128 图,
 #     lr 同步减半; 原 bs128 双视图 (256 图/卡) 与 OOM 场景等激活量。
 #     若仍 OOM: 先减半 trainers.batch_size, 再降 classifiers.sample_rate。
-#   - K=3 + sample_rate=0.40 使每卡激活中心行数 x3 (~12.4万行), logit 显存/耗时
-#     高于 K=1 基线。
+#   - K=3 + sample_rate=0.40 使每卡激活中心行数 x3 (~14.1万行 @7卡), logit 显存/
+#     耗时高于 K=1 基线。
 #   - QGFace 约束: pipelines.qgface.queue_size(8192) >= 2 x 全局 batch
-#     (s1-s3: 256x8x2=4096 <= 8192 ✓; 若调大 bs 需同步调大 queue_size)。
+#     (s1-s3: 256x7x2=3584 <= 8192 ✓; 若调大 bs 需同步调大 queue_size)。
 #   - 分类器断点/衔接全程要求 K=3, 勿与 K=1 campaign 的 checkpoint 目录混用
 #     (world_size 相同时形状校验会直接报错拦截)。
 #
@@ -57,17 +67,19 @@ set -uo pipefail
 
 # ----------------------------- 可调参数 -----------------------------
 CAMPAIGN="qgface_subcenter_260922"   # 本次战役前缀; 换超参数开新战役时改它, 避免误续旧目录
-NGPU=8                         # GPU 数 (分类器 partial_fc 按 rank 分片, 中途不可改)
+NGPU=7                         # GPU 数 (分类器 partial_fc 按 rank 分片, 中途不可改; GPU7 已故障禁用)
 MAX_RETRY=3                    # 阶段内连续无进展的最大重试次数
-WORKDIR=/root/zhaokj/CVLface/cvlface/research/recognition/code/work_260922_qgface_subcenter
+WORKDIR=/root/zhaokj/CVLface_rec/cvlface/research/recognition/code/work_260922_qgface_subcenter
 SAVE_ROOT=/data1/dataset_260918/train_output
 PRETRAINED=/root/zhaokj/CVLface/cvlface/pretrained_models/recognition/adaface_ir101_webface12m/model.pt
 
-# ----------------------------- 环境 (8卡机 qingsi) -----------------------------
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-export CUDA_HOME=/root/anaconda3/envs/cvlface
-export PATH=/root/anaconda3/envs/cvlface/bin:$PATH
-export LD_LIBRARY_PATH=/root/anaconda3/envs/cvlface/lib:${LD_LIBRARY_PATH:-}   # scipy libstdc++ 冲突
+# ----------------------------- 环境 (star 192.168.2.100) -----------------------------
+# 注: 本机 cvlface 环境在 miniconda3 下; /root/anaconda3/envs/cvlface 是另一台
+# 8 卡机的路径, 不可混用 (见文件头【服务器环境】)。
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6
+export CUDA_HOME=/root/miniconda3/envs/cvlface
+export PATH=/root/miniconda3/envs/cvlface/bin:$PATH
+export LD_LIBRARY_PATH=/root/miniconda3/envs/cvlface/lib:${LD_LIBRARY_PATH:-}   # scipy libstdc++ 冲突
 export DECODE_BACKEND=turbojpeg
 
 LOGDIR="${SAVE_ROOT}/shell_logs"
