@@ -1,0 +1,11 @@
+data_root: "/data1/dataset_260918"
+eval_every_n_epochs: 1
+per_epoch_evaluations: {
+  "IJBC": {
+    'path': 'facerec_val/IJBC_gt_aligned',
+    'evaluation_type': 'ijbbc',
+    'color_space': 'RGB',
+    'batch_size': 96,
+    'num_workers': 8
+  },
+}

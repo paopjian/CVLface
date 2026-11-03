@@ -745,7 +745,8 @@ def gather_and_deduplicate(shm_path, world_size):
 
 def compute_metric_type4(embeddings, query_ids, num_gpus):
     """type=4: large scale matrix + TPIR（v7: fp16 GEMM + CUDA 双桶直读核, hist@2000）"""
-    target_fars = [1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
+    target_fars = [float(x) for x in os.environ.get(
+        'TRT_TARGET_FARS', '1e-10,1e-9,1e-8,1e-7,1e-6').split(',')]
     t_sim = time.time()
     pos_hist, neg_hist = get_sim_matrix_large_scale_v7(
         query_feats_list=embeddings,
